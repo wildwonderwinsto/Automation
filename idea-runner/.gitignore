@@ -2,3 +2,11 @@ node_modules/
 .next/
 out/
 .env*.local
+
+# Local binaries (whisper.cpp, etc.)
+bin/
+
+# Generated audio/video files
+public/voiceover*
+voiceover*
+public/voiceover_script.txt

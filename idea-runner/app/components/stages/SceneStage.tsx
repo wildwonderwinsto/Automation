@@ -20,40 +20,48 @@ export function SceneStage({
   const [status, setStatus] = useState<"idle" | "generating" | "ready">(
     scenes.length > 0 ? "ready" : "idle"
   );
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (scenes.length === 0 && status === "idle") {
       // Auto-start scene generation when mounting if we have a script
-      handleGenerateScenes();
+      handleSplitScenes();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function handleGenerateScenes() {
+  async function handleSplitScenes() {
     if (status === "generating") return;
     setStatus("generating");
+    setError(null);
 
-    // Placeholder — Swap for API call based on `script_to_scene.md` guidelines
-    setTimeout(() => {
-      onScenesChange([
-        {
-          scene_id: 1,
-          script_text: `Most people think it comes down to willpower.`,
-          simple_description: "character standing with arms crossed",
-        },
-        {
-          scene_id: 2,
-          script_text: `It doesn't.`,
-          simple_description: "character shaking head",
-        },
-        {
-          scene_id: 3,
-          script_text: `It's actually about designing your environment so you don't need any.`,
-          simple_description: "character arranging his desk",
-        },
-      ]);
+    try {
+      const res = await fetch("/api/split-scenes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ script }),
+      });
+
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      // Map the returned scenes to include a selected_image field
+      const mappedScenes = data.scenes.map((s: any) => ({
+        ...s,
+        selected_image: null,
+      }));
+
+      onScenesChange(mappedScenes);
       setStatus("ready");
-    }, 1500);
+    } catch (e: any) {
+      console.error(e);
+      setError(e.message || "Failed to split scenes");
+      setStatus("idle");
+    }
   }
 
   function handleDescriptionChange(id: number, val: string) {
@@ -120,9 +128,15 @@ export function SceneStage({
           ))}
         </div>
 
+        {error && (
+          <div className="mt-4 rounded-md border border-red-500/50 bg-red-500/10 p-3 text-sm text-red-600">
+            <strong>Error:</strong> {error}
+          </div>
+        )}
+
         <div className="mt-6 flex flex-wrap justify-end gap-2">
           <button
-            onClick={handleGenerateScenes}
+            onClick={handleSplitScenes}
             className="inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm text-ink hover:bg-surface hover:border-muted"
           >
             <Wand2 className="h-4 w-4" />

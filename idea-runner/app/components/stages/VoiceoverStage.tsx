@@ -19,6 +19,7 @@ export function VoiceoverStage({
   const [status, setStatus] = useState<"idle" | "generating" | "ready">(
     audioUrl ? "ready" : "idle"
   );
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === "idle" && script) {
@@ -27,16 +28,33 @@ export function VoiceoverStage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function handleGenerateAudio() {
+  async function handleGenerateAudio() {
     if (status === "generating") return;
     setStatus("generating");
+    setError(null);
 
-    // Placeholder — Simulate AI generating audio and removing silences
-    setTimeout(() => {
-      // In a real app, this would be the processed audio URL
-      onAudioGenerated("https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3");
+    try {
+      const res = await fetch("/api/generate-voiceover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ script }),
+      });
+
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      // Add a cache-busting query param so the browser forces an audio reload
+      onAudioGenerated(data.audioUrl + "?t=" + Date.now());
       setStatus("ready");
-    }, 3000);
+    } catch (e: any) {
+      console.error(e);
+      setError(e.message || "Failed to generate voice-over");
+      setStatus("idle");
+    }
   }
 
   if (status === "generating") {
@@ -89,6 +107,12 @@ export function VoiceoverStage({
           </div>
         ) : (
           <div className="text-sm text-muted">No audio generated yet.</div>
+        )}
+
+        {error && (
+          <div className="mt-4 rounded-md border border-red-500/50 bg-red-500/10 p-3 text-sm text-red-600">
+            <strong>Error:</strong> {error}
+          </div>
         )}
 
         <div className="mt-6 flex flex-wrap justify-end gap-2">

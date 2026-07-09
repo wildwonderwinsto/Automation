@@ -21,17 +21,36 @@ export function ScriptStage({
   const [status, setStatus] = useState<"idle" | "generating" | "ready">(
     script ? "ready" : "idle"
   );
+  const [error, setError] = useState<string | null>(null);
 
-  function handleGenerate() {
-    if (!topic.trim() || status === "generating") return;
+  async function handleGenerate() {
+    if (status === "generating") return;
+    if (!topic.trim()) return;
+
     setStatus("generating");
-    // Placeholder — swap this for a real API call later.
-    setTimeout(() => {
-      onScriptChange(
-        `Most people think "${topic.trim()}" comes down to willpower. It doesn't.\n\n[Placeholder draft — wire the Generate button to your script prompt when the backend is ready.]`
-      );
+    setError(null);
+
+    try {
+      const res = await fetch("/api/generate-script", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic }),
+      });
+
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      onScriptChange(data.script);
       setStatus("ready");
-    }, 1100);
+    } catch (e: any) {
+      console.error(e);
+      setError(e.message || "Failed to generate script");
+      setStatus("idle");
+    }
   }
 
   return (
@@ -105,6 +124,13 @@ export function ScriptStage({
                 rows={10}
                 className="animate-fade-in w-full resize-y rounded-lg border border-line bg-surface p-3 text-sm leading-relaxed text-ink outline-none focus:border-accent focus:ring-1 focus:ring-accent/30"
               />
+              
+              {error && (
+                <div className="mt-4 rounded-md border border-red-500/50 bg-red-500/10 p-3 text-sm text-red-600">
+                  <strong>Error:</strong> {error}
+                </div>
+              )}
+
               <div className="mt-4 flex flex-wrap justify-end gap-2">
                 <button
                   onClick={handleGenerate}
