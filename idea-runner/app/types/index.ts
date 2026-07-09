@@ -16,4 +16,6 @@ export type Scene = {
   script_text: string;
   simple_description: string;
   note?: string;
+  generated_images?: string[];
+  selected_image?: string;
 };

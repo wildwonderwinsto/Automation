@@ -5,7 +5,18 @@ import { StageNavigation } from "./components/layout/StageNavigation";
 import { NotesPanel } from "./components/shared/NotesPanel";
 import { ScriptStage } from "./components/stages/ScriptStage";
 import { SceneStage } from "./components/stages/SceneStage";
+import { ImageStage } from "./components/stages/ImageStage";
+import { VoiceoverStage } from "./components/stages/VoiceoverStage";
+import { CaptionsStage } from "./components/stages/CaptionsStage";
+import { AssembleStage } from "./components/stages/AssembleStage";
 import { Note, Scene } from "./types";
+
+type SrtBlock = {
+  index: number;
+  start: string;
+  end: string;
+  text: string;
+};
 
 export default function Home() {
   const [currentStageId, setCurrentStageId] = useState<number>(1);
@@ -17,8 +28,14 @@ export default function Home() {
   const [topic, setTopic] = useState("");
   const [script, setScript] = useState("");
 
-  // Stage 2 State
+  // Stage 2 & 3 State
   const [scenes, setScenes] = useState<Scene[]>([]);
+
+  // Stage 4 State
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+
+  // Stage 5 State
+  const [srtBlocks, setSrtBlocks] = useState<SrtBlock[]>([]);
 
   function handleAddNote(text: string) {
     setNotes([
@@ -42,8 +59,38 @@ export default function Home() {
     if (!completedStageIds.includes(2)) {
       setCompletedStageIds([...completedStageIds, 2]);
     }
-    // Advance to stage 3 once implemented
-    // setCurrentStageId(3);
+    setCurrentStageId(3);
+  }
+
+  function handleImageApprove() {
+    if (!completedStageIds.includes(3)) {
+      setCompletedStageIds([...completedStageIds, 3]);
+    }
+    setCurrentStageId(4);
+  }
+
+  function handleVoiceoverApprove() {
+    if (!completedStageIds.includes(4)) {
+      setCompletedStageIds([...completedStageIds, 4]);
+    }
+    setCurrentStageId(5);
+  }
+
+  function handleCaptionsApprove() {
+    if (!completedStageIds.includes(5)) {
+      setCompletedStageIds([...completedStageIds, 5]);
+    }
+    setCurrentStageId(6);
+  }
+
+  function handleRestart() {
+    setCurrentStageId(1);
+    setCompletedStageIds([]);
+    setTopic("");
+    setScript("");
+    setScenes([]);
+    setAudioUrl(null);
+    setSrtBlocks([]);
   }
 
   return (
@@ -55,10 +102,17 @@ export default function Home() {
             Idea runner
           </p>
           <h1 className="font-display text-2xl font-medium text-ink">
-            {currentStageId === 1 ? "Topic to script" : "Script to scenes"}
+            {currentStageId === 1 ? "Topic to script" : 
+             currentStageId === 2 ? "Script to scenes" : 
+             currentStageId === 3 ? "Scenes to images" :
+             currentStageId === 4 ? "Voice-over" :
+             currentStageId === 5 ? "Captions (.srt)" :
+             "Final assembly"}
           </h1>
           <p className="mt-1 text-sm text-muted">
-            Stage {currentStageId} of 6 — everything else in the pipeline waits on this.
+            {currentStageId < 6
+              ? `Stage ${currentStageId} of 6 — everything else in the pipeline waits on this.`
+              : "All stages complete — your video is ready."}
           </p>
         </div>
 
@@ -89,10 +143,42 @@ export default function Home() {
             />
           )}
 
-          {currentStageId > 2 && (
-            <section className="card-interactive rounded-card border border-line bg-surfaceRaised p-6 flex items-center justify-center text-muted text-sm">
-              Stage {currentStageId} UI coming soon...
-            </section>
+          {currentStageId === 3 && (
+            <ImageStage
+              scenes={scenes}
+              onScenesChange={setScenes}
+              isApproved={completedStageIds.includes(3)}
+              onApprove={handleImageApprove}
+            />
+          )}
+
+          {currentStageId === 4 && (
+            <VoiceoverStage
+              script={script}
+              audioUrl={audioUrl}
+              onAudioGenerated={setAudioUrl}
+              isApproved={completedStageIds.includes(4)}
+              onApprove={handleVoiceoverApprove}
+            />
+          )}
+
+          {currentStageId === 5 && (
+            <CaptionsStage
+              scenes={scenes}
+              srtBlocks={srtBlocks}
+              onSrtGenerated={setSrtBlocks}
+              isApproved={completedStageIds.includes(5)}
+              onApprove={handleCaptionsApprove}
+            />
+          )}
+
+          {currentStageId === 6 && (
+            <AssembleStage
+              scenes={scenes}
+              audioUrl={audioUrl}
+              srtBlocks={srtBlocks}
+              onRestart={handleRestart}
+            />
           )}
 
           <NotesPanel

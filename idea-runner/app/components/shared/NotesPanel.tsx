@@ -23,11 +23,11 @@ export function NotesPanel({ notes, onAddNote, onDeleteNote }: Props) {
         <div className="mb-1 flex items-center gap-2">
           <StickyNote className="h-4 w-4 text-note" />
           <h2 className="font-display text-sm font-medium text-ink">
-            Notes on this stage
+            AI Training Notes
           </h2>
         </div>
         <p className="mb-4 text-xs text-muted">
-          &ldquo;I like the hook, but the ending drags.&rdquo;
+          General feedback to help the AI learn and improve for future generations.
         </p>
         <textarea
           value={noteDraft}
@@ -38,7 +38,7 @@ export function NotesPanel({ notes, onAddNote, onDeleteNote }: Props) {
             }
           }}
           rows={3}
-          placeholder="I like this part, but it needs..."
+          placeholder="e.g. Make the pacing faster, use brighter colors..."
           className="w-full resize-none rounded-lg border border-line bg-surface p-3 text-sm text-ink outline-none focus:border-note focus:ring-1 focus:ring-note/30"
         />
         <button
