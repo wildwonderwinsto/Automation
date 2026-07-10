@@ -1,0 +1,108 @@
+// Cross-platform replacement for assemble-video.sh.
+// No bash, jq, awk, or bc required — pure Node + a direct ffmpeg call.
+
+import fs from 'fs';
+import path from 'path';
+import { execFileSync } from 'child_process';
+
+function parseTimeToSeconds(timeStr) {
+  const [hms, ms] = timeStr.trim().split(',');
+  const [h, m, s] = hms.split(':').map(Number);
+  return h * 3600 + m * 60 + s + Number(ms) / 1000;
+}
+
+// Finds the start/end time for a given SRT block number (1-indexed),
+// same job the old awk one-liner was doing.
+function parseSrtBlockTimes(srtContent, blockNumber) {
+  const blocks = srtContent.trim().split(/\r?\n\r?\n/);
+  for (const block of blocks) {
+    const lines = block.split(/\r?\n/);
+    if (parseInt(lines[0], 10) === blockNumber) {
+      const [startStr, endStr] = lines[1].split('-->');
+      return {
+        start: parseTimeToSeconds(startStr),
+        end: parseTimeToSeconds(endStr),
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * Assembles final_video.mp4 inside projectDir from scenes.json,
+ * voiceover.mp3, and captions.srt.
+ *
+ * @param {string} projectDir
+ * @param {string} ffmpegPath - resolved path to the ffmpeg binary (e.g. from ffmpeg-static)
+ * @returns {string} path to the generated final_video.mp4
+ */
+export function assembleVideo(projectDir, ffmpegPath) {
+  const scenesJsonPath = path.join(projectDir, 'scenes.json');
+  const audioPath = path.join(projectDir, 'voiceover.mp3');
+  const srtPath = path.join(projectDir, 'captions.srt');
+  const outputPath = path.join(projectDir, 'final_video.mp4');
+
+  for (const f of [scenesJsonPath, audioPath, srtPath]) {
+    if (!fs.existsSync(f)) {
+      throw new Error(`Missing required file: ${f}`);
+    }
+  }
+
+  const scenes = JSON.parse(fs.readFileSync(scenesJsonPath, 'utf-8'));
+  const srtContent = fs.readFileSync(srtPath, 'utf-8');
+
+  if (scenes.length === 0) {
+    throw new Error('scenes.json has no scenes');
+  }
+
+  const inputArgs = [];
+  const filterParts = [];
+  const concatLabels = [];
+
+  scenes.forEach((scene, i) => {
+    const imagePath = scene.selected_image;
+    if (!imagePath || !fs.existsSync(imagePath)) {
+      throw new Error(`Image not found for scene ${i + 1}: ${imagePath}`);
+    }
+
+    const times = parseSrtBlockTimes(srtContent, i + 1);
+    if (!times) {
+      throw new Error(`No caption timing found for scene ${i + 1} (block ${i + 1} in captions.srt)`);
+    }
+    const duration = Math.max(0.1, times.end - times.start);
+
+    inputArgs.push('-loop', '1', '-t', String(duration), '-i', imagePath);
+    filterParts.push(
+      `[${i}:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30[v${i}]`
+    );
+    concatLabels.push(`[v${i}]`);
+  });
+
+  const audioIndex = scenes.length;
+  const filterComplex =
+    filterParts.join(';') +
+    `;${concatLabels.join('')}concat=n=${scenes.length}:v=1:a=0[video]`;
+
+  // ffmpeg's subtitles filter treats ':' as an option separator, which breaks
+  // on Windows paths like C:\Users\... — escape the drive-letter colon and
+  // flip backslashes to forward slashes to keep it working cross-platform.
+  const safeSrtPath = srtPath.replace(/\\/g, '/').replace(':', '\\:');
+
+  const args = [
+    '-y',
+    ...inputArgs,
+    '-i', audioPath,
+    '-filter_complex', filterComplex,
+    '-map', '[video]',
+    '-map', `${audioIndex}:a`,
+    '-vf', `subtitles='${safeSrtPath}':force_style='FontName=Arial,FontSize=22,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,Shadow=1,Alignment=2,MarginV=40'`,
+    '-c:v', 'libx264', '-preset', 'medium', '-crf', '23',
+    '-c:a', 'aac', '-b:a', '192k',
+    '-shortest',
+    outputPath,
+  ];
+
+  execFileSync(ffmpegPath, args, { stdio: 'inherit' });
+
+  return outputPath;
+}

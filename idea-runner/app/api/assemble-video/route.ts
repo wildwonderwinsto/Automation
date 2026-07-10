@@ -1,27 +1,23 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import ffmpegStatic from 'ffmpeg-static';
-import ffprobeStatic from 'ffprobe-static';
-
-const execAsync = promisify(exec);
+import { assembleVideo } from '../../../scripts/assemble-video-node.mjs';
 
 export async function POST(req: Request) {
   try {
     const { scenes, srtBlocks, audioUrl } = await req.json();
-    
+
     // Create unique project dir
     const id = Date.now().toString();
     const publicOutput = path.join(process.cwd(), 'public', 'output');
     const projectDir = path.join(publicOutput, id);
-    
+
     if (!fs.existsSync(publicOutput)) {
       fs.mkdirSync(publicOutput, { recursive: true });
     }
     fs.mkdirSync(projectDir, { recursive: true });
-    
+
     // 1. Download images and update scenes
     const localScenes = [];
     for (let i = 0; i < scenes.length; i++) {
@@ -34,7 +30,7 @@ export async function POST(req: Request) {
           const res = await fetch(scene.selected_image);
           if (!res.ok) throw new Error(`Failed to fetch image: ${scene.selected_image}`);
           const buffer = await res.arrayBuffer();
-          fs.writeFileSync(localImagePath, Buffer.from(buffer));
+          fs.writeFileSync(localImagePath, new Uint8Array(buffer));
         } else {
           // If it's already a local path relative to public
           localImagePath = path.join(process.cwd(), 'public', scene.selected_image);
@@ -45,21 +41,21 @@ export async function POST(req: Request) {
         selected_image: localImagePath
       });
     }
-    
+
     // Write scenes.json
     fs.writeFileSync(path.join(projectDir, 'scenes.json'), JSON.stringify(localScenes, null, 2));
-    
+
     // 2. Format SRT and save
     const srtContent = srtBlocks.map((b: any) => `${b.index}\n${b.start} --> ${b.end}\n${b.text}`).join('\n\n') + '\n';
     fs.writeFileSync(path.join(projectDir, 'captions.srt'), srtContent);
-    
+
     // 3. Handle audioUrl
     const localAudioPath = path.join(projectDir, 'voiceover.mp3');
     if (audioUrl) {
       if (audioUrl.startsWith('http')) {
         const res = await fetch(audioUrl);
         const buffer = await res.arrayBuffer();
-        fs.writeFileSync(localAudioPath, Buffer.from(buffer));
+        fs.writeFileSync(localAudioPath, new Uint8Array(buffer));
       } else {
         // Assume it's a relative path in public/
         const srcAudio = path.join(process.cwd(), 'public', audioUrl.replace(/^\//, ''));
@@ -71,28 +67,20 @@ export async function POST(req: Request) {
         }
       }
     } else {
-       // Fallback to default
-       fs.copyFileSync(path.join(process.cwd(), 'public', 'voiceover.mp3'), localAudioPath);
+      // Fallback to default
+      fs.copyFileSync(path.join(process.cwd(), 'public', 'voiceover.mp3'), localAudioPath);
     }
-    
-    // 4. Run assembly script
-    const scriptPath = path.join(process.cwd(), 'scripts', 'assemble-video.sh');
-    
-    const { stdout, stderr } = await execAsync(`bash "${scriptPath}" "${projectDir}"`, {
-      env: {
-        ...process.env,
-        FFMPEG: ffmpegStatic || '',
-        FFPROBE: ffprobeStatic.path || ''
-      }
-    });
-    
-    console.log("FFmpeg Output:", stdout);
-    if (stderr) console.error("FFmpeg Error/Warn:", stderr);
-    
+
+    // 4. Run assembly (pure Node now — works on macOS, Windows, and Linux)
+    if (!ffmpegStatic) {
+      throw new Error('ffmpeg-static did not resolve a binary for this platform');
+    }
+    assembleVideo(projectDir, ffmpegStatic);
+
     // Return relative URL for frontend
     const finalVideoUrl = `/output/${id}/final_video.mp4`;
     return NextResponse.json({ videoUrl: finalVideoUrl });
-    
+
   } catch (error: any) {
     console.error("Assembly error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
