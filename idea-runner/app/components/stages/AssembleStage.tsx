@@ -32,6 +32,7 @@ export function AssembleStage({ scenes, audioUrl, srtBlocks, onRestart }: Props)
   >("idle");
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [resolution, setResolution] = useState<"1080p" | "4k">("1080p");
 
   useEffect(() => {
     if (status === "idle") {
@@ -49,7 +50,7 @@ export function AssembleStage({ scenes, audioUrl, srtBlocks, onRestart }: Props)
       const res = await fetch("/api/assemble-video", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scenes, srtBlocks, audioUrl }),
+        body: JSON.stringify({ scenes, srtBlocks, audioUrl, resolution }),
       });
 
       if (!res.ok) {
@@ -224,7 +225,15 @@ export function AssembleStage({ scenes, audioUrl, srtBlocks, onRestart }: Props)
           </div>
         </div>
 
-        <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row justify-end gap-2">
+        <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row justify-end items-center gap-3">
+          <select
+            value={resolution}
+            onChange={(e) => setResolution(e.target.value as "1080p" | "4k")}
+            className="rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none"
+          >
+            <option value="1080p">1080p 60fps</option>
+            <option value="4k">4K 60fps</option>
+          </select>
           <button
             onClick={handleAssemble}
             className="inline-flex items-center justify-center gap-2 rounded-lg border border-line px-4 py-2 text-sm text-ink hover:bg-surface hover:border-muted"

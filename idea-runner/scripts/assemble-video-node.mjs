@@ -36,7 +36,7 @@ function parseSrtBlockTimes(srtContent, blockNumber) {
  * @param {string} ffmpegPath - resolved path to the ffmpeg binary (e.g. from ffmpeg-static)
  * @returns {string} path to the generated final_video.mp4
  */
-export function assembleVideo(projectDir, ffmpegPath) {
+export function assembleVideo(projectDir, ffmpegPath, resolution = "1080p", fps = 30) {
   const scenesJsonPath = path.join(projectDir, 'scenes.json');
   const audioPath = path.join(projectDir, 'voiceover.mp3');
   const srtPath = path.join(projectDir, 'captions.srt');
@@ -58,6 +58,11 @@ export function assembleVideo(projectDir, ffmpegPath) {
   const inputArgs = [];
   const filterParts = [];
   const concatLabels = [];
+  
+  const is4K = resolution === "4k";
+  const targetWidth = is4K ? 3840 : 1920;
+  const targetHeight = is4K ? 2160 : 1080;
+  const fontSize = is4K ? 44 : 22;
 
   scenes.forEach((scene, i) => {
     const imagePath = scene.selected_image;
@@ -73,7 +78,7 @@ export function assembleVideo(projectDir, ffmpegPath) {
 
     inputArgs.push('-loop', '1', '-t', String(duration), '-i', imagePath);
     filterParts.push(
-      `[${i}:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30[v${i}]`
+      `[${i}:v]scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=${fps}[v${i}]`
     );
     concatLabels.push(`[v${i}]`);
   });
@@ -93,7 +98,7 @@ export function assembleVideo(projectDir, ffmpegPath) {
   const filterComplex =
     filterParts.join(';') +
     `;${concatLabels.join('')}concat=n=${scenes.length}:v=1:a=0[raw]` +
-    `;[raw]subtitles='${safeSrtPath}':force_style='FontName=Arial,FontSize=22,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,Shadow=1,Alignment=2,MarginV=40'[video]`;
+    `;[raw]subtitles='${safeSrtPath}':force_style='FontName=Arial,FontSize=${fontSize},PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,Shadow=1,Alignment=2,MarginV=40'[video]`;
 
   const args = [
     '-y',

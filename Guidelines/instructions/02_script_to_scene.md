@@ -39,10 +39,7 @@ if it doesn't match exactly, that step breaks.
 must reconstruct the full input script exactly. Every word belongs to exactly
 one scene.
 
-**Scene length.** Aim for one sentence or clause per scene — roughly
-2–4 seconds of narration (~8–16 words at typical speaking pace). Don't split
-in the middle of a clause just to hit a target length; a slightly longer scene
-reads better than an awkward split mid-thought.
+**Scene length.** Aim for extremely short, punchy scenes — strictly 2 to 3 words per scene. Do not exceed 4 words in a single scene. This ensures fast-paced visuals and allows the downstream caption generator to display only a couple of words on screen at a time.
 
 **simple_description must be extremely brief and literal.** It should state exactly what the subject is doing in plain terms without any artistic style, complex background details, or abstract concepts (e.g., "character using a megaphone", "man walking next to two trees"). This ensures the scene can be easily mapped to an existing library of simple images.
 

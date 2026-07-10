@@ -12,7 +12,7 @@ export async function POST(req: Request) {
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     // Read the instruction file
     const instructionsPath = path.join(process.cwd(), '../Guidelines/instructions/01_script_writer.md');

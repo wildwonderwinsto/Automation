@@ -6,7 +6,7 @@ import { assembleVideo } from '../../../scripts/assemble-video-node.mjs';
 
 export async function POST(req: Request) {
   try {
-    const { scenes, srtBlocks, audioUrl } = await req.json();
+    const { scenes, srtBlocks, audioUrl, resolution = "1080p" } = await req.json();
 
     // Create unique project dir
     const id = Date.now().toString();
@@ -75,7 +75,7 @@ export async function POST(req: Request) {
     if (!ffmpegStatic) {
       throw new Error('ffmpeg-static did not resolve a binary for this platform');
     }
-    assembleVideo(projectDir, ffmpegStatic);
+    assembleVideo(projectDir, ffmpegStatic, resolution, 60);
 
     // Return relative URL for frontend
     const finalVideoUrl = `/output/${id}/final_video.mp4`;

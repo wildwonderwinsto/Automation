@@ -169,6 +169,7 @@ export default function Home() {
           {currentStageId === 5 && (
             <CaptionsStage
               scenes={scenes}
+              audioUrl={audioUrl}
               srtBlocks={srtBlocks}
               onSrtGenerated={setSrtBlocks}
               isApproved={completedStageIds.includes(5)}

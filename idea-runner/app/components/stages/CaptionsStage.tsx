@@ -11,6 +11,7 @@ type SrtBlock = {
 
 type Props = {
   scenes: Scene[];
+  audioUrl: string | null;
   srtBlocks: SrtBlock[];
   onSrtGenerated: (blocks: SrtBlock[]) => void;
   isApproved: boolean;
@@ -27,6 +28,7 @@ function formatTimestamp(seconds: number): string {
 
 export function CaptionsStage({
   scenes,
+  audioUrl,
   srtBlocks,
   onSrtGenerated,
   isApproved,
@@ -43,45 +45,26 @@ export function CaptionsStage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function handleGenerateSrt() {
+  async function handleGenerateSrt() {
     if (status === "generating") return;
     setStatus("generating");
 
-    // Simulate AI transcription + timestamp alignment
-    setTimeout(() => {
-      let currentTime = 0;
-      let blockIndex = 1;
-      const blocks: SrtBlock[] = [];
-
-      scenes.forEach((scene) => {
-        const words = scene.script_text.trim().split(/\s+/).filter(Boolean);
-        
-        // Group words into chunks of ~4 words max for punchy captions
-        const chunkSize = 4;
-        for (let i = 0; i < words.length; i += chunkSize) {
-          const chunk = words.slice(i, i + chunkSize);
-          const chunkText = chunk.join(" ");
-          
-          // Allocate time based on word count
-          const duration = Math.max(0.8, chunk.length * 0.35); // ~0.35s per word
-          
-          const start = formatTimestamp(currentTime);
-          currentTime += duration;
-          const end = formatTimestamp(currentTime);
-          
-          blocks.push({
-            index: blockIndex++,
-            start,
-            end,
-            text: chunkText,
-          });
-        }
-        currentTime += 0.2; // Small gap between scenes
+    try {
+      const res = await fetch("/api/generate-captions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scenes, audioUrl }),
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to generate captions");
 
-      onSrtGenerated(blocks);
+      onSrtGenerated(data.srtBlocks);
       setStatus("ready");
-    }, 2000);
+    } catch (err: any) {
+      console.error(err);
+      setStatus("idle");
+      alert(err.message);
+    }
   }
 
   function blocksToSrtString(blocks: SrtBlock[]): string {
