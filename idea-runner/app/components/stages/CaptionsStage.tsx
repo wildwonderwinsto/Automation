@@ -50,20 +50,35 @@ export function CaptionsStage({
     // Simulate AI transcription + timestamp alignment
     setTimeout(() => {
       let currentTime = 0;
-      const blocks: SrtBlock[] = scenes.map((scene, i) => {
-        const wordCount = scene.script_text.split(/\s+/).length;
-        const duration = Math.max(1.5, wordCount * 0.35); // ~0.35s per word
-        const start = formatTimestamp(currentTime);
-        currentTime += duration;
-        const end = formatTimestamp(currentTime);
-        currentTime += 0.1; // small gap between blocks
-        return {
-          index: i + 1,
-          start,
-          end,
-          text: scene.script_text,
-        };
+      let blockIndex = 1;
+      const blocks: SrtBlock[] = [];
+
+      scenes.forEach((scene) => {
+        const words = scene.script_text.trim().split(/\s+/).filter(Boolean);
+        
+        // Group words into chunks of ~4 words max for punchy captions
+        const chunkSize = 4;
+        for (let i = 0; i < words.length; i += chunkSize) {
+          const chunk = words.slice(i, i + chunkSize);
+          const chunkText = chunk.join(" ");
+          
+          // Allocate time based on word count
+          const duration = Math.max(0.8, chunk.length * 0.35); // ~0.35s per word
+          
+          const start = formatTimestamp(currentTime);
+          currentTime += duration;
+          const end = formatTimestamp(currentTime);
+          
+          blocks.push({
+            index: blockIndex++,
+            start,
+            end,
+            text: chunkText,
+          });
+        }
+        currentTime += 0.2; // Small gap between scenes
       });
+
       onSrtGenerated(blocks);
       setStatus("ready");
     }, 2000);

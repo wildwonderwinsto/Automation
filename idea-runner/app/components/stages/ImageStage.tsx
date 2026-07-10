@@ -35,10 +35,10 @@ export function ImageStage({
       onScenesChange(
         scenes.map((scene) => ({
           ...scene,
-          // Generate 2 mock placeholder images using dummyimage
+          // Generate 2 mock placeholder images using placehold.co for better reliability
           generated_images: [
-            `https://dummyimage.com/600x400/2a2d30/ffffff&text=Scene+${scene.scene_id}+-+V1`,
-            `https://dummyimage.com/600x400/0E7C66/ffffff&text=Scene+${scene.scene_id}+-+V2`,
+            `https://placehold.co/600x400/2a2d30/ffffff.png?text=Scene+${scene.scene_id}+-+V1`,
+            `https://placehold.co/600x400/0E7C66/ffffff.png?text=Scene+${scene.scene_id}+-+V2`,
           ],
           selected_image: undefined, // Reset selection if regenerating
         }))
@@ -53,6 +53,18 @@ export function ImageStage({
         s.scene_id === sceneId ? { ...s, selected_image: imageSrc } : s
       )
     );
+  }
+
+  function handleApproveSubmit() {
+    const updatedScenes = scenes.map((s) => {
+      if (!s.selected_image && s.generated_images && s.generated_images.length > 0) {
+        return { ...s, selected_image: s.generated_images[0] };
+      }
+      return s;
+    });
+    
+    onScenesChange(updatedScenes);
+    onApprove();
   }
 
   const allSelected = scenes.every((s) => !!s.selected_image);
@@ -137,12 +149,11 @@ export function ImageStage({
             Regenerate All
           </button>
           <button
-            onClick={onApprove}
-            disabled={!allSelected}
-            className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-white hover:shadow-md hover:bg-[#2a2d30] disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={handleApproveSubmit}
+            className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-white hover:shadow-md hover:bg-[#2a2d30]"
           >
             <Check className="h-4 w-4" />
-            Approve selected images
+            Approve images
           </button>
         </div>
       </div>

@@ -4,6 +4,8 @@ import { Sparkles, Loader2, RefreshCw, Check, CheckCircle2 } from "lucide-react"
 type Props = {
   topic: string;
   onTopicChange: (topic: string) => void;
+  details: string;
+  onDetailsChange: (details: string) => void;
   script: string;
   onScriptChange: (script: string) => void;
   isApproved: boolean;
@@ -13,11 +15,14 @@ type Props = {
 export function ScriptStage({
   topic,
   onTopicChange,
+  details,
+  onDetailsChange,
   script,
   onScriptChange,
   isApproved,
   onApprove,
 }: Props) {
+  const [showDetails, setShowDetails] = useState(details.length > 0);
   const [status, setStatus] = useState<"idle" | "generating" | "ready">(
     script ? "ready" : "idle"
   );
@@ -34,7 +39,7 @@ export function ScriptStage({
       const res = await fetch("/api/generate-script", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic }),
+        body: JSON.stringify({ topic, details }),
       });
 
       if (!res.ok) {
@@ -85,6 +90,31 @@ export function ScriptStage({
               </>
             )}
           </button>
+        </div>
+
+        {/* Details Toggle & Input */}
+        <div className="mt-3">
+          {!showDetails ? (
+            <button
+              onClick={() => setShowDetails(true)}
+              className="text-xs font-medium text-accent hover:text-accent-hover flex items-center gap-1"
+            >
+              + Add specific details or research instructions
+            </button>
+          ) : (
+            <div className="animate-fade-in space-y-2 mt-2">
+              <label className="font-mono text-xs uppercase tracking-wide text-muted">
+                Specific details or research (Optional)
+              </label>
+              <textarea
+                value={details}
+                onChange={(e) => onDetailsChange(e.target.value)}
+                placeholder="List specific facts to include, tone instructions, or strict constraints..."
+                rows={3}
+                className="w-full resize-y rounded-lg border border-line bg-surface p-3 text-sm text-ink outline-none focus:border-accent focus:ring-1 focus:ring-accent/30"
+              />
+            </div>
+          )}
         </div>
       </div>
 

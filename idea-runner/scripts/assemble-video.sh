@@ -22,6 +22,8 @@
 set -euo pipefail
 
 PROJECT_DIR="${1:?Usage: assemble-video.sh <project_dir>}"
+FFMPEG="${FFMPEG:-ffmpeg}"
+FFPROBE="${FFPROBE:-ffprobe}"
 
 SCENES_JSON="$PROJECT_DIR/scenes.json"
 AUDIO="$PROJECT_DIR/voiceover.mp3"
@@ -40,7 +42,7 @@ echo "── Assemble Video ──"
 echo "Project:  $PROJECT_DIR"
 
 # Get audio duration
-AUDIO_DURATION=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$AUDIO")
+AUDIO_DURATION=$("$FFPROBE" -v error -show_entries format=duration -of csv=p=0 "$AUDIO")
 echo "Audio:    ${AUDIO_DURATION}s"
 
 # Read scene count
@@ -102,7 +104,7 @@ echo "Assembling video..."
 # - Concat image segments into video
 # - Add audio track
 # - Burn in subtitles
-$FFMPEG -y \
+"$FFMPEG" -y \
   $INPUTS \
   -i "$AUDIO" \
   -filter_complex "$FILTER" \
@@ -117,6 +119,6 @@ $FFMPEG -y \
 echo ""
 echo "✓ Done!"
 echo "  Output: $OUTPUT"
-FINAL_DUR=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$OUTPUT")
+FINAL_DUR=$("$FFPROBE" -v error -show_entries format=duration -of csv=p=0 "$OUTPUT")
 echo "  Duration: ${FINAL_DUR}s"
 echo "  Scenes: $SCENE_COUNT"

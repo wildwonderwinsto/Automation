@@ -26,6 +26,7 @@ export default function Home() {
 
   // Stage 1 State
   const [topic, setTopic] = useState("");
+  const [details, setDetails] = useState("");
   const [script, setScript] = useState("");
 
   // Stage 2 & 3 State
@@ -87,6 +88,7 @@ export default function Home() {
     setCurrentStageId(1);
     setCompletedStageIds([]);
     setTopic("");
+    setDetails("");
     setScript("");
     setScenes([]);
     setAudioUrl(null);
@@ -126,6 +128,8 @@ export default function Home() {
             <ScriptStage
               topic={topic}
               onTopicChange={setTopic}
+              details={details}
+              onDetailsChange={setDetails}
               script={script}
               onScriptChange={setScript}
               isApproved={completedStageIds.includes(1)}

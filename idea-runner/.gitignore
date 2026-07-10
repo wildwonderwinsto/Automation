@@ -10,3 +10,4 @@ bin/
 public/voiceover*
 voiceover*
 public/voiceover_script.txt
+public/output/

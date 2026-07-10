@@ -74,6 +74,16 @@ Every section should create an emotional shift.
 
 ---
 
+## Research & Hallucination Prevention
+
+When you receive specific details or are required to research a topic, **you must prioritize accuracy above all else**.
+- **Use Reliable Sources**: Base your facts on established news outlets, verified academic reports, official company press releases, and credible experts.
+- **Avoid Random Forums**: Do not source information from random Reddit posts, unverified social media claims, or unreliable blogs.
+- **Prevent Hallucinations**: If you do not know a fact or cannot verify it, **do not invent it**. Never exaggerate numbers, fabricate quotes, or make up statistics. Stick strictly to the information provided in the "Specific Details & Research" section or your reliable knowledge base.
+- **Grounding**: Ensure that every claim made in the script can be traced back to a factual anchor. Mention the source generically if needed to build credibility (e.g., "According to a recent industry report...").
+
+---
+
 ## Writing Principles
 
 **Always:**

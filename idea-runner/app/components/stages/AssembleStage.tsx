@@ -28,8 +28,10 @@ type Props = {
 
 export function AssembleStage({ scenes, audioUrl, srtBlocks, onRestart }: Props) {
   const [status, setStatus] = useState<
-    "idle" | "assembling" | "done"
+    "idle" | "assembling" | "done" | "error"
   >("idle");
+  const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === "idle") {
@@ -38,14 +40,32 @@ export function AssembleStage({ scenes, audioUrl, srtBlocks, onRestart }: Props)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function handleAssemble() {
+  async function handleAssemble() {
     if (status === "assembling") return;
     setStatus("assembling");
+    setErrorMsg(null);
 
-    // Simulate FFmpeg assembly
-    setTimeout(() => {
+    try {
+      const res = await fetch("/api/assemble-video", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scenes, srtBlocks, audioUrl }),
+      });
+
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      setFinalVideoUrl(data.videoUrl);
       setStatus("done");
-    }, 4000);
+    } catch (e: any) {
+      console.error(e);
+      setErrorMsg(e.message || "Failed to assemble video");
+      setStatus("error");
+    }
   }
 
   if (status === "assembling") {
@@ -53,11 +73,28 @@ export function AssembleStage({ scenes, audioUrl, srtBlocks, onRestart }: Props)
       <section className="card-interactive rounded-card border border-line bg-surfaceRaised p-6 flex h-64 flex-col items-center justify-center gap-4 text-sm text-muted">
         <Loader2 className="h-6 w-6 animate-spin text-accent" />
         <div className="text-center">
-          <p className="animate-pulse mb-1">Assembling final video...</p>
+          <p className="animate-pulse mb-1">Assembling final video with FFmpeg...</p>
           <p className="text-xs opacity-70">
             Mapping images → timestamps → audio → captions
           </p>
+          <p className="text-[10px] text-muted mt-2">This may take 10-20 seconds.</p>
         </div>
+      </section>
+    );
+  }
+
+  if (status === "error") {
+    return (
+      <section className="card-interactive rounded-card border border-red-500/20 bg-red-500/5 p-6 flex flex-col items-center justify-center gap-4 text-sm">
+        <p className="text-red-500 font-medium">Failed to assemble video</p>
+        <p className="text-muted text-xs bg-white/50 p-2 rounded border border-red-500/20 max-w-md break-all">{errorMsg}</p>
+        <button
+          onClick={handleAssemble}
+          className="mt-2 inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-white hover:shadow-md"
+        >
+          <RotateCcw className="h-4 w-4" />
+          Try Again
+        </button>
       </section>
     );
   }
@@ -89,10 +126,15 @@ export function AssembleStage({ scenes, audioUrl, srtBlocks, onRestart }: Props)
             Your video has been assembled from {scenes.length} scenes with
             voice-over and burned-in captions.
           </p>
-          <button className="inline-flex items-center gap-2 rounded-lg bg-ink px-6 py-2.5 text-sm font-medium text-white hover:shadow-md hover:bg-[#2a2d30]">
+          <a 
+            href={finalVideoUrl || "#"} 
+            target="_blank" 
+            download="final_video.mp4"
+            className="inline-flex items-center gap-2 rounded-lg bg-ink px-6 py-2.5 text-sm font-medium text-white hover:shadow-md hover:bg-[#2a2d30]"
+          >
             <Download className="h-4 w-4" />
             Download final_video.mp4
-          </button>
+          </a>
         </div>
 
         {/* Assembly summary */}
