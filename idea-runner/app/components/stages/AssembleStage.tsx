@@ -100,9 +100,9 @@ export function AssembleStage({ scenes, audioUrl, srtBlocks, onRestart }: Props)
   }
 
   return (
-    <section className="space-y-4">
-      <div className="card-interactive animate-fade-slide-up rounded-card border border-line bg-surfaceRaised p-6">
-        <div className="mb-6 flex items-center justify-between">
+    <section className="space-y-4 w-full min-w-0">
+      <div className="card-interactive animate-fade-slide-up rounded-card border border-line bg-surfaceRaised p-4 sm:p-6">
+        <div className="mb-4 sm:mb-6 flex items-center justify-between">
           <span className="font-mono text-xs uppercase tracking-wide text-muted">
             Final Assembly
           </span>
@@ -115,22 +115,41 @@ export function AssembleStage({ scenes, audioUrl, srtBlocks, onRestart }: Props)
         </div>
 
         {/* Success banner */}
-        <div className="rounded-xl border-2 border-accent/30 bg-accent/5 p-8 text-center space-y-4 mb-6">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-accent/10">
-            <Film className="h-8 w-8 text-accent" />
+        <div className="rounded-xl border-2 border-accent/30 bg-accent/5 p-4 sm:p-6 text-center space-y-3 mb-4 sm:mb-6">
+          <div className="mx-auto flex h-12 w-12 sm:h-16 sm:w-16 items-center justify-center rounded-full bg-accent/10">
+            <Film className="h-6 w-6 sm:h-8 sm:w-8 text-accent" />
           </div>
-          <h3 className="font-display text-lg font-medium text-ink">
+          <h3 className="font-display text-base sm:text-lg font-medium text-ink">
             Video Ready 🎉
           </h3>
-          <p className="text-sm text-muted max-w-md mx-auto">
+          <p className="text-xs sm:text-sm text-muted max-w-md mx-auto">
             Your video has been assembled from {scenes.length} scenes with
             voice-over and burned-in captions.
           </p>
-          <a 
-            href={finalVideoUrl || "#"} 
-            target="_blank" 
+        </div>
+
+        {/* Inline video player */}
+        {finalVideoUrl && (
+          <div className="mb-4 sm:mb-6 rounded-lg overflow-hidden border border-line bg-black">
+            <video
+              key={finalVideoUrl}
+              controls
+              className="w-full max-h-[50vh] object-contain"
+              style={{ aspectRatio: "16/9" }}
+            >
+              <source src={finalVideoUrl} type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
+          </div>
+        )}
+
+        {/* Download button */}
+        <div className="flex justify-center mb-4 sm:mb-6">
+          <a
+            href={finalVideoUrl || "#"}
+            target="_blank"
             download="final_video.mp4"
-            className="inline-flex items-center gap-2 rounded-lg bg-ink px-6 py-2.5 text-sm font-medium text-white hover:shadow-md hover:bg-[#2a2d30]"
+            className="inline-flex items-center gap-2 rounded-lg bg-ink px-5 py-2.5 text-sm font-medium text-white hover:shadow-md hover:bg-[#2a2d30]"
           >
             <Download className="h-4 w-4" />
             Download final_video.mp4
@@ -138,32 +157,32 @@ export function AssembleStage({ scenes, audioUrl, srtBlocks, onRestart }: Props)
         </div>
 
         {/* Assembly summary */}
-        <div className="rounded-lg border border-line bg-surface p-4 space-y-4">
+        <div className="rounded-lg border border-line bg-surface p-3 sm:p-4 space-y-3 sm:space-y-4">
           <span className="font-mono text-xs text-muted block">
             Assembly Summary
           </span>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="rounded-lg border border-line bg-white p-3 flex items-center gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+            <div className="rounded-lg border border-line bg-white p-2.5 sm:p-3 flex items-center gap-3">
               <ImageIcon className="h-5 w-5 text-accent shrink-0" />
-              <div>
-                <p className="text-sm font-medium text-ink">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-ink truncate">
                   {scenes.length} images
                 </p>
                 <p className="text-[11px] text-muted">Selected scenes</p>
               </div>
             </div>
-            <div className="rounded-lg border border-line bg-white p-3 flex items-center gap-3">
+            <div className="rounded-lg border border-line bg-white p-2.5 sm:p-3 flex items-center gap-3">
               <Volume2 className="h-5 w-5 text-accent shrink-0" />
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-medium text-ink">Voice-over</p>
                 <p className="text-[11px] text-muted">Silences removed</p>
               </div>
             </div>
-            <div className="rounded-lg border border-line bg-white p-3 flex items-center gap-3">
+            <div className="rounded-lg border border-line bg-white p-2.5 sm:p-3 flex items-center gap-3">
               <Subtitles className="h-5 w-5 text-accent shrink-0" />
-              <div>
-                <p className="text-sm font-medium text-ink">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-ink truncate">
                   {srtBlocks.length} captions
                 </p>
                 <p className="text-[11px] text-muted">Burned-in .srt</p>
@@ -176,26 +195,26 @@ export function AssembleStage({ scenes, audioUrl, srtBlocks, onRestart }: Props)
             <span className="font-mono text-[11px] text-muted block">
               Timeline
             </span>
-            <div className="flex gap-1 overflow-x-auto pb-1">
+            <div className="flex flex-nowrap overflow-x-auto pb-1 gap-1">
               {scenes.map((scene) => (
                 <div
                   key={scene.scene_id}
-                  className="shrink-0 rounded-md border border-line bg-white overflow-hidden"
-                  style={{ width: `${Math.max(80, 100)}px` }}
+                  className="rounded-md border border-line bg-white overflow-hidden"
+                  style={{ width: "72px", flexShrink: 0 }}
                 >
                   {scene.selected_image ? (
                     <img
                       src={scene.selected_image}
                       alt={`Scene ${scene.scene_id}`}
-                      className="w-full h-12 object-cover"
+                      className="w-full h-10 object-cover"
                     />
                   ) : (
-                    <div className="w-full h-12 bg-surface flex items-center justify-center">
+                    <div className="w-full h-10 bg-surface flex items-center justify-center">
                       <ImageIcon className="h-3 w-3 text-muted" />
                     </div>
                   )}
-                  <div className="px-1.5 py-1">
-                    <p className="font-mono text-[9px] text-muted truncate">
+                  <div className="px-1 py-0.5">
+                    <p className="font-mono text-[9px] text-muted truncate text-center">
                       S{scene.scene_id}
                     </p>
                   </div>
@@ -205,17 +224,17 @@ export function AssembleStage({ scenes, audioUrl, srtBlocks, onRestart }: Props)
           </div>
         </div>
 
-        <div className="mt-6 flex justify-end gap-2">
+        <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row justify-end gap-2">
           <button
             onClick={handleAssemble}
-            className="inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm text-ink hover:bg-surface hover:border-muted"
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-line px-4 py-2 text-sm text-ink hover:bg-surface hover:border-muted"
           >
             <RotateCcw className="h-4 w-4" />
             Re-assemble
           </button>
           <button
             onClick={onRestart}
-            className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2 text-sm font-medium text-white hover:shadow-md hover:bg-accent/90"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-5 py-2 text-sm font-medium text-white hover:shadow-md hover:bg-accent/90"
           >
             Complete & Start New
             <ArrowRight className="h-4 w-4" />

@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
@@ -16,6 +16,20 @@ export async function POST(req: Request) {
       model: "gemini-2.5-flash",
       generationConfig: {
         responseMimeType: "application/json",
+        responseSchema: {
+          type: SchemaType.ARRAY,
+          description: "A scene-by-scene breakdown of the script",
+          items: {
+            type: SchemaType.OBJECT,
+            properties: {
+              scene_id: { type: SchemaType.NUMBER, description: "Sequential ID of the scene starting from 1" },
+              script_text: { type: SchemaType.STRING, description: "Exact, verbatim substring of the script for this scene" },
+              simple_description: { type: SchemaType.STRING, description: "A very brief, literal visual description of what's happening" },
+              note: { type: SchemaType.STRING, description: "Optional note if something is ambiguous" }
+            },
+            required: ["scene_id", "script_text", "simple_description"]
+          }
+        }
       }
     });
 

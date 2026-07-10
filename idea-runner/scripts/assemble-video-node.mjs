@@ -79,14 +79,21 @@ export function assembleVideo(projectDir, ffmpegPath) {
   });
 
   const audioIndex = scenes.length;
-  const filterComplex =
-    filterParts.join(';') +
-    `;${concatLabels.join('')}concat=n=${scenes.length}:v=1:a=0[video]`;
 
   // ffmpeg's subtitles filter treats ':' as an option separator, which breaks
   // on Windows paths like C:\Users\... — escape the drive-letter colon and
   // flip backslashes to forward slashes to keep it working cross-platform.
-  const safeSrtPath = srtPath.replace(/\\/g, '/').replace(':', '\\:');
+  const safeSrtPath = srtPath.replace(/\\/g, '/').replace(/:/g, '\\\\:');
+
+  // Build the full filter_complex graph:
+  // 1. Scale/pad each image → [v0], [v1], ...
+  // 2. Concat all segments  → [raw]
+  // 3. Burn in subtitles    → [video]
+  // Using a single -filter_complex avoids the illegal -vf + -filter_complex combo.
+  const filterComplex =
+    filterParts.join(';') +
+    `;${concatLabels.join('')}concat=n=${scenes.length}:v=1:a=0[raw]` +
+    `;[raw]subtitles='${safeSrtPath}':force_style='FontName=Arial,FontSize=22,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,Shadow=1,Alignment=2,MarginV=40'[video]`;
 
   const args = [
     '-y',
@@ -95,8 +102,8 @@ export function assembleVideo(projectDir, ffmpegPath) {
     '-filter_complex', filterComplex,
     '-map', '[video]',
     '-map', `${audioIndex}:a`,
-    '-vf', `subtitles='${safeSrtPath}':force_style='FontName=Arial,FontSize=22,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,Shadow=1,Alignment=2,MarginV=40'`,
     '-c:v', 'libx264', '-preset', 'medium', '-crf', '23',
+    '-pix_fmt', 'yuv420p',
     '-c:a', 'aac', '-b:a', '192k',
     '-shortest',
     outputPath,
