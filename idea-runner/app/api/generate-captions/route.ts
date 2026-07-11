@@ -33,7 +33,8 @@ export async function POST(req: Request) {
         const buffer = await res.arrayBuffer();
         fs.writeFileSync(localAudioPath, new Uint8Array(buffer));
       } else {
-        const srcAudio = path.join(process.cwd(), 'public', audioUrl.replace(/^\//, ''));
+        const cleanAudioUrl = audioUrl.split('?')[0];
+        const srcAudio = path.join(process.cwd(), 'public', cleanAudioUrl.replace(/^\//, ''));
         if (fs.existsSync(srcAudio)) {
           fs.copyFileSync(srcAudio, localAudioPath);
         } else {

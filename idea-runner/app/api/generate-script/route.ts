@@ -6,13 +6,18 @@ import path from 'path';
 export async function POST(req: Request) {
   try {
     const { topic, details } = await req.json();
+
+    if (topic.trim().toLowerCase() === 'test') {
+      const testScript = "This is a test script to check the video pipeline. It bypasses the AI completely to save time and API quota. Let's see if the final video renders correctly!";
+      return NextResponse.json({ script: testScript });
+    }
     
     if (!process.env.GEMINI_API_KEY) {
       return NextResponse.json({ error: "Missing GEMINI_API_KEY in .env.local" }, { status: 400 });
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 
     // Read the instruction file
     const instructionsPath = path.join(process.cwd(), '../Guidelines/instructions/01_script_writer.md');

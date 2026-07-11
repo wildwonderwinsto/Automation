@@ -7,13 +7,21 @@ export async function POST(req: Request) {
   try {
     const { script } = await req.json();
     
+    if (script === "This is a test script to check the video pipeline. It bypasses the AI completely to save time and API quota. Let's see if the final video renders correctly!") {
+      return NextResponse.json({ scenes: [
+        { scene_id: 1, script_text: "This is a test script to check the video pipeline.", simple_description: "A person looking at a computer screen showing code." },
+        { scene_id: 2, script_text: "It bypasses the AI completely to save time and API quota.", simple_description: "A futuristic AI brain with a red 'X' over it." },
+        { scene_id: 3, script_text: "Let's see if the final video renders correctly!", simple_description: "A film clapperboard snapping shut." }
+      ]});
+    }
+
     if (!process.env.GEMINI_API_KEY) {
       return NextResponse.json({ error: "Missing GEMINI_API_KEY in .env.local" }, { status: 400 });
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-2.0-flash",
+      model: "gemini-flash-latest",
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: {
