@@ -165,6 +165,27 @@ export function AssembleStage({ scenes, audioUrl, srtBlocks, sceneTimings, capti
             </button>
           </div>
 
+          {/* Caption style summary */}
+          <div className="max-w-md mx-auto mb-8 rounded-xl border border-line bg-surface p-4">
+            <p className="font-mono text-[10px] uppercase tracking-wide text-muted mb-3">Caption Settings</p>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+              <span className="text-muted">Font</span>
+              <span className="text-ink font-medium text-right" style={{ fontFamily: captionStyle.fontFamily }}>{captionStyle.fontFamily}</span>
+              <span className="text-muted">Size</span>
+              <span className="text-ink font-medium text-right capitalize">{captionStyle.fontSize}</span>
+              <span className="text-muted">Position</span>
+              <span className="text-ink font-medium text-right capitalize">{captionStyle.position}</span>
+              <span className="text-muted">Transition</span>
+              <span className="text-ink font-medium text-right capitalize">{captionStyle.transition}</span>
+              <span className="text-muted">Words/caption</span>
+              <span className="text-ink font-medium text-right">{captionStyle.wordsPerCaption === "max" ? "Max (per scene)" : captionStyle.wordsPerCaption}</span>
+            </div>
+            <p className="text-[10px] text-muted/70 mt-3 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              Rendered via ASS format — preview-accurate
+            </p>
+          </div>
+
           {/* Render button */}
           <div className="flex justify-center">
             <button

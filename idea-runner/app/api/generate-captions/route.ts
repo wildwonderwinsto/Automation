@@ -82,7 +82,14 @@ export async function POST(req: Request) {
       sceneTimings = JSON.parse(fs.readFileSync(sceneTimingsPath, 'utf-8'));
     }
 
-    return NextResponse.json({ srtBlocks: blocks, sceneTimings });
+    // Read word_timings.json (used by video assembler for karaoke/typewriter mode)
+    const wordTimingsPath = path.join(projectDir, 'word_timings.json');
+    let wordTimings = [];
+    if (fs.existsSync(wordTimingsPath)) {
+      wordTimings = JSON.parse(fs.readFileSync(wordTimingsPath, 'utf-8'));
+    }
+
+    return NextResponse.json({ srtBlocks: blocks, sceneTimings, wordTimings });
 
   } catch (error: any) {
     console.error("Caption generation error:", error);

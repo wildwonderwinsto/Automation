@@ -16,6 +16,7 @@ const AUDIO_FILE = path.join(PROJECT_DIR, 'voiceover.mp3');
 const WAV_FILE = path.join(PROJECT_DIR, 'voiceover.wav');
 const SRT_FILE = path.join(PROJECT_DIR, 'voiceover.wav.srt');
 const OUTPUT_SRT = path.join(PROJECT_DIR, 'captions.srt');
+const WORD_TIMINGS_FILE = path.join(PROJECT_DIR, 'word_timings.json');
 const SCENE_TIMINGS_FILE = path.join(PROJECT_DIR, 'scene_timings.json');
 
 const WHISPER_BIN = path.join(__dirname, '..', 'bin', 'whisper.cpp', 'main');
@@ -35,6 +36,35 @@ function formatTime(seconds) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')},${String(ms).padStart(3, '0')}`;
 }
 
+/**
+ * Clean up a word from Whisper output.
+ * Removes brackets, extra spaces, leading/trailing punctuation artifacts.
+ * This is a common issue with whisper.cpp -sow output.
+ */
+function cleanWord(word) {
+  return word
+    .replace(/^\[.*?\]\s*/, '')    // Remove [BLANK_AUDIO] etc.
+    .replace(/\s*\[.*?\]$/, '')    // Remove trailing brackets
+    .replace(/^\s+|\s+$/g, '')     // Trim whitespace
+    .replace(/^[^\w'"¿¡]+/, '')    // Remove leading non-word chars (except quotes)
+    .replace(/[^\w.,!?;:'"…\-¿¡]+$/, ''); // Remove trailing non-word chars (except punctuation)
+}
+
+/**
+ * Determines if a word is a short function word that should stay attached
+ * to the next content word (Premiere Pro / CapCut style grouping).
+ * These are never shown alone as a caption.
+ */
+function isFunctionWord(word) {
+  const functionWords = new Set([
+    'a', 'an', 'the', 'is', 'am', 'are', 'was', 'were', 'be', 'been',
+    'to', 'of', 'in', 'on', 'at', 'by', 'for', 'or', 'and', 'but',
+    'if', 'so', 'no', 'do', 'it', 'he', 'we', 'my', 'me', 'us',
+    'i', 'as', 'up', 'its'
+  ]);
+  return functionWords.has(word.toLowerCase());
+}
+
 try {
   console.log("── Generate Captions ──");
   console.log(`   Words per caption: ${WORDS_PER_CAPTION}`);
@@ -44,6 +74,9 @@ try {
   execSync(`"${ffmpegStatic}" -y -i "${AUDIO_FILE}" -ar 16000 -ac 1 -c:a pcm_s16le "${WAV_FILE}"`, { stdio: 'pipe' });
 
   // 2. Run Whisper.cpp
+  // -ml 1 -sow: max segment length 1 + split on word boundaries
+  // This gives us word-level timestamps — the same core technique
+  // Premiere Pro and CapCut use (speech-to-text → forced alignment).
   console.log("2. Transcribing with whisper.cpp (-ml 1 -sow for perfect word timings)...");
   execSync(`"${WHISPER_BIN}" -m "${WHISPER_MODEL}" -f "${WAV_FILE}" -osrt -ml 1 -sow`, { stdio: 'inherit' });
 
@@ -61,10 +94,19 @@ try {
     const timeLine = lines[1];
     if (!timeLine.includes(' --> ')) return null;
     const [start, end] = timeLine.split(' --> ');
-    const text = lines.slice(2).join(' ').trim();
+    let text = lines.slice(2).join(' ').trim();
+    
+    // Clean up Whisper artifacts
+    text = cleanWord(text);
     if (!text) return null;
+    
     return { word: text, start: parseTime(start), end: parseTime(end) };
   }).filter(Boolean);
+
+  // 3b. Save word-level timings for the video assembler (used for karaoke/typewriter mode)
+  // This is the key data that CapCut uses for word-by-word highlighting.
+  writeFileSync(WORD_TIMINGS_FILE, JSON.stringify(allWords, null, 2));
+  console.log(`   ✓ Wrote word_timings.json (${allWords.length} words)`);
 
   // 4. Build scene timings by consuming words per scene
   console.log("4. Building scene timings...");
@@ -130,10 +172,25 @@ try {
       wordIndex += sceneWords.length;
     }
   } else {
-    // Chunked mode: group every N words into a caption block
-    for (let i = 0; i < allWords.length; i += wpc) {
-      const chunk = allWords.slice(i, i + wpc);
-      if (chunk.length === 0) continue;
+    // Chunked mode: group every N words into a caption block.
+    // Improved grouping logic inspired by Premiere Pro and CapCut:
+    // - Don't leave a lone function word at the end of a group
+    // - Keep short words attached to the next content word
+    let i = 0;
+    while (i < allWords.length) {
+      let chunkEnd = Math.min(i + wpc, allWords.length);
+
+      // Smart boundary: if the last word in the chunk is a function word
+      // and there are more words, extend the chunk to include the next content word
+      if (chunkEnd < allWords.length && chunkEnd > i) {
+        const lastWord = allWords[chunkEnd - 1];
+        if (isFunctionWord(lastWord.word) && chunkEnd < allWords.length) {
+          chunkEnd = Math.min(chunkEnd + 1, allWords.length);
+        }
+      }
+
+      const chunk = allWords.slice(i, chunkEnd);
+      if (chunk.length === 0) break;
 
       const startTimestamp = formatTime(chunk[0].start);
       const endTimestamp = formatTime(chunk[chunk.length - 1].end);
@@ -143,6 +200,7 @@ try {
       finalSrt += `${startTimestamp} --> ${endTimestamp}\n`;
       finalSrt += `${text}\n\n`;
       captionIndex++;
+      i = chunkEnd;
     }
   }
 

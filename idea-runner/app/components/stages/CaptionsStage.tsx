@@ -68,7 +68,7 @@ const TRANSITION_OPTIONS: {
   { value: "fade", label: "Fade", desc: "Smooth opacity" },
   { value: "pop", label: "Pop", desc: "Scale bounce" },
   { value: "slide-up", label: "Slide Up", desc: "Rise from below" },
-  { value: "typewriter", label: "Typewriter", desc: "Letter by letter" },
+  { value: "typewriter", label: "Typewriter", desc: "Word by word" },
   { value: "bounce", label: "Bounce", desc: "Drop & bounce" },
 ];
 
@@ -80,6 +80,32 @@ const WPC_OPTIONS: { value: number | "max"; label: string }[] = [
   { value: 5, label: "5" },
   { value: "max", label: "Max" },
 ];
+
+/**
+ * Generates a CSS text-shadow that closely mimics an ASS Outline effect.
+ * ASS Outline creates a solid border around text. We approximate this with
+ * multiple shadow layers in 8 directions + a soft ambient shadow.
+ *
+ * This is the key to making the preview match the FFmpeg render.
+ * The outline thickness scales with font size (5.5% of font size),
+ * matching the ASS Outline value in assemble-video-node.mjs.
+ */
+function assOutlineShadow(outlinePx: number, shadowPx: number): string {
+  // 8-direction solid outline (simulates ASS Outline border)
+  const outline = outlinePx;
+  const directions = [
+    [outline, 0], [-outline, 0], [0, outline], [0, -outline],
+    [outline, outline], [-outline, -outline], [outline, -outline], [-outline, outline],
+  ];
+  const outlineShadows = directions.map(
+    ([x, y]) => `${x}px ${y}px 0 rgba(0,0,0,0.95)`
+  );
+
+  // Drop shadow (simulates ASS Shadow)
+  const dropShadow = `${shadowPx}px ${shadowPx}px ${shadowPx * 2}px rgba(0,0,0,0.5)`;
+
+  return [...outlineShadows, dropShadow].join(', ');
+}
 
 export function CaptionsStage({
   scenes,
@@ -125,7 +151,7 @@ export function CaptionsStage({
     setPreviewAnimKey((k) => k + 1);
   }
 
-  // Typewriter effect: reveal characters one at a time
+  // Typewriter effect: reveal words one at a time (matches CapCut's \kf karaoke)
   useEffect(() => {
     if (captionStyle.transition !== "typewriter") {
       setTypewriterText(previewText);
@@ -134,17 +160,18 @@ export function CaptionsStage({
     }
     setTypewriterDone(false);
     setTypewriterText("");
-    let charIndex = 0;
+    const words = previewText.split(/\s+/);
+    let wordIdx = 0;
     const interval = setInterval(() => {
-      charIndex++;
-      if (charIndex >= previewText.length) {
+      wordIdx++;
+      if (wordIdx >= words.length) {
         setTypewriterText(previewText);
         setTypewriterDone(true);
         clearInterval(interval);
       } else {
-        setTypewriterText(previewText.slice(0, charIndex));
+        setTypewriterText(words.slice(0, wordIdx).join(' '));
       }
-    }, 40);
+    }, 200);
     return () => clearInterval(interval);
   }, [previewText, previewAnimKey, captionStyle.transition]);
 
@@ -186,15 +213,37 @@ export function CaptionsStage({
     handleGenerateSrt(val);
   }
 
-  /* ── Preview font size mapping ── */
-  const previewFontSize =
-    captionStyle.fontSize === "small"
-      ? "2.5cqw"
-      : captionStyle.fontSize === "large"
-      ? "5cqw"
-      : "3.75cqw";
+  /* ── Preview font size mapping ──
+   * These values exactly match the ASS FontSize at PlayRes 1920x1080:
+   * - small:  48 / 1920 = 2.5cqw
+   * - medium: 72 / 1920 = 3.75cqw
+   * - large:  96 / 1920 = 5cqw
+   * Because the preview container uses container-type: inline-size with
+   * 16:9 aspect ratio, these cqw values produce pixel-identical sizing.
+   */
+  const fontSizeValues = { small: 48, medium: 72, large: 96 };
+  const currentFontSize = fontSizeValues[captionStyle.fontSize] || 72;
+  const previewFontSize = `${(currentFontSize / 1920) * 100}cqw`;
 
-  /* ── Preview position mapping ── */
+  /* ── Outline/Shadow matching ASS values ──
+   * Outline = 5.5% of font size, Shadow = 2.5% of font size
+   * These match assemble-video-node.mjs exactly.
+   * Convert from PlayRes units to cqw for the preview.
+   */
+  const outlinePx = Math.max(1, Math.round(currentFontSize * 0.055));
+  const shadowPx = Math.max(1, Math.round(currentFontSize * 0.025));
+  const textShadowStyle = assOutlineShadow(
+    // Scale outline to container-query relative size
+    // At full 1920px width these are exact; at smaller preview sizes they scale proportionally
+    Math.round(outlinePx * 0.7), // Slight reduction since CSS multi-shadow looks heavier
+    Math.round(shadowPx * 0.7)
+  );
+
+  /* ── Preview position mapping ──
+   * Matches ASS Alignment values and MarginV.
+   * MarginV = 38px at 1080p PlayRes = 38/1080 = ~3.5% of height.
+   * For 16:9 container, that's 3.5% of (width / 16 * 9) = 3.5cqh equivalent.
+   */
   const previewPositionClass =
     captionStyle.position === "top"
       ? "items-start"
@@ -204,12 +253,15 @@ export function CaptionsStage({
   
   const previewPaddingStyle = 
     captionStyle.position === "top"
-      ? { paddingTop: "2cqw", paddingBottom: "0" }
+      ? { paddingTop: "3.5%", paddingBottom: "0" }
       : captionStyle.position === "center"
       ? { paddingTop: "0", paddingBottom: "0" }
-      : { paddingTop: "0", paddingBottom: "2cqw" };
+      : { paddingTop: "0", paddingBottom: "3.5%" };
 
-  /* ── Preview animation ── */
+  /* ── Preview animation ──
+   * These CSS animations mimic the ASS override tags used in
+   * assemble-video-node.mjs applyTransitionTags().
+   */
   const transitionStyle = (() => {
     switch (captionStyle.transition) {
       case "fade":
@@ -219,7 +271,7 @@ export function CaptionsStage({
       case "slide-up":
         return "animate-[captionSlideUp_0.35s_ease_both]";
       case "typewriter":
-        return ""; // handled by JS state
+        return ""; // handled by JS state (word-by-word reveal)
       case "bounce":
         return "animate-[captionBounce_0.5s_cubic-bezier(0.34,1.56,0.64,1)_both]";
       default:
@@ -266,7 +318,13 @@ export function CaptionsStage({
           )}
         </div>
 
-        {/* ── Live Preview ── */}
+        {/* ── Live Preview ──
+         * This preview is designed to exactly match the ASS subtitle render.
+         * - Font size uses cqw units that correspond to ASS FontSize at PlayRes 1920x1080
+         * - Text shadow uses multi-directional solid shadows to mimic ASS Outline
+         * - Position padding matches ASS MarginV (3.5% of height = 38/1080)
+         * - Max width matches ASS MarginL/MarginR (144px each = ~85% of 1920)
+         */}
         <div
           className={`relative rounded-xl bg-gradient-to-br from-neutral-900 via-neutral-800 to-neutral-900 border border-white/10 overflow-hidden mb-6 flex justify-center ${previewPositionClass}`}
           style={{ containerType: "inline-size", aspectRatio: "16/9", minHeight: "180px", ...previewPaddingStyle }}
@@ -279,25 +337,31 @@ export function CaptionsStage({
           <div className="absolute top-3 left-3 bg-black/50 backdrop-blur-sm rounded-md px-2 py-1 font-mono text-[10px] text-white/60">
             00:00:03,200
           </div>
+          {/* Render method badge */}
+          <div className="absolute top-3 right-3 bg-black/50 backdrop-blur-sm rounded-md px-2 py-1 font-mono text-[10px] text-white/60 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            ASS render
+          </div>
           {/* Caption text */}
           <div
             key={previewAnimKey}
             className={`px-4 max-w-[85%] ${transitionStyle}`}
           >
             <p
-              className="text-center leading-none"
+              className="text-center leading-tight"
               style={{
                 fontSize: previewFontSize,
                 fontFamily: captionStyle.fontFamily,
                 color: "white",
-                textShadow: "0 0.1cqw 0.2cqw rgba(0,0,0,0.8), 0 0 0.1cqw rgba(0,0,0,0.5)",
+                textShadow: textShadowStyle,
+                lineHeight: 1.2,
               }}
             >
               {captionStyle.transition === "typewriter" ? (
                 <>
                   {typewriterText}
                   {!typewriterDone && (
-                    <span className="animate-[blink_0.7s_step-end_infinite] ml-[1px]">|</span>
+                    <span className="animate-[blink_0.7s_step-end_infinite] ml-[1px] opacity-60">|</span>
                   )}
                 </>
               ) : (

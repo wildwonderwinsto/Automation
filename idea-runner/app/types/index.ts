@@ -41,3 +41,9 @@ export type SceneTiming = {
   start: number;
   end: number;
 };
+
+export type WordTiming = {
+  word: string;
+  start: number;
+  end: number;
+};
