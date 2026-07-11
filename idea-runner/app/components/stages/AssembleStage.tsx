@@ -1,15 +1,15 @@
-import { useState, useEffect } from "react";
-import { Scene } from "../../types";
+import { useState } from "react";
+import { Scene, CaptionStyle } from "../../types";
 import {
   CheckCircle2,
   Loader2,
   Film,
-  Image as ImageIcon,
-  Volume2,
-  Subtitles,
   Download,
   RotateCcw,
-  ArrowRight,
+  Sparkles,
+  Play,
+  Monitor,
+  MonitorSmartphone,
 } from "lucide-react";
 
 type SrtBlock = {
@@ -23,23 +23,17 @@ type Props = {
   scenes: Scene[];
   audioUrl: string | null;
   srtBlocks: SrtBlock[];
+  captionStyle: CaptionStyle;
   onRestart: () => void;
 };
 
-export function AssembleStage({ scenes, audioUrl, srtBlocks, onRestart }: Props) {
+export function AssembleStage({ scenes, audioUrl, srtBlocks, captionStyle, onRestart }: Props) {
   const [status, setStatus] = useState<
-    "idle" | "assembling" | "done" | "error"
-  >("idle");
+    "config" | "assembling" | "done" | "error"
+  >("config");
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [resolution, setResolution] = useState<"1080p" | "4k">("1080p");
-
-  useEffect(() => {
-    if (status === "idle") {
-      handleAssemble();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   async function handleAssemble() {
     if (status === "assembling") return;
@@ -50,7 +44,7 @@ export function AssembleStage({ scenes, audioUrl, srtBlocks, onRestart }: Props)
       const res = await fetch("/api/assemble-video", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scenes, srtBlocks, audioUrl, resolution }),
+        body: JSON.stringify({ scenes, srtBlocks, audioUrl, resolution, captionStyle }),
       });
 
       if (!res.ok) {
@@ -69,73 +63,144 @@ export function AssembleStage({ scenes, audioUrl, srtBlocks, onRestart }: Props)
     }
   }
 
+  /* ───────── Assembling state ───────── */
   if (status === "assembling") {
     return (
-      <section className="card-interactive rounded-card border border-line bg-surfaceRaised p-6 flex h-64 flex-col items-center justify-center gap-4 text-sm text-muted">
-        <Loader2 className="h-6 w-6 animate-spin text-accent" />
-        <div className="text-center">
-          <p className="animate-pulse mb-1">Assembling final video with FFmpeg...</p>
-          <p className="text-xs opacity-70">
-            Mapping images → timestamps → audio → captions
+      <section className="card-interactive rounded-card border border-line bg-surfaceRaised p-8 sm:p-12 flex flex-col items-center justify-center gap-5 text-sm text-muted min-h-[320px]">
+        <div className="relative">
+          <div className="absolute inset-0 rounded-full bg-accent/20 animate-ping" style={{ animationDuration: "2s" }} />
+          <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-accent/10 border border-accent/20">
+            <Film className="h-7 w-7 text-accent animate-pulse" />
+          </div>
+        </div>
+        <div className="text-center space-y-2">
+          <p className="text-ink font-medium text-base">Rendering your video...</p>
+          <p className="text-xs text-muted max-w-xs mx-auto">
+            FFmpeg is stitching {scenes.length} scenes with voiceover and burned-in captions at {resolution === "4k" ? "4K" : "1080p"} 60fps.
           </p>
-          <p className="text-[10px] text-muted mt-2">This may take 10-20 seconds.</p>
+          <p className="text-[10px] text-muted/60 mt-3">This usually takes 10–30 seconds</p>
         </div>
       </section>
     );
   }
 
+  /* ───────── Error state ───────── */
   if (status === "error") {
     return (
-      <section className="card-interactive rounded-card border border-red-500/20 bg-red-500/5 p-6 flex flex-col items-center justify-center gap-4 text-sm">
-        <p className="text-red-500 font-medium">Failed to assemble video</p>
-        <p className="text-muted text-xs bg-white/50 p-2 rounded border border-red-500/20 max-w-md break-all">{errorMsg}</p>
+      <section className="card-interactive rounded-card border border-red-500/20 bg-surfaceRaised p-8 flex flex-col items-center justify-center gap-4 text-sm min-h-[280px]">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-50 border border-red-200">
+          <RotateCcw className="h-6 w-6 text-red-500" />
+        </div>
+        <p className="text-ink font-medium">Assembly failed</p>
+        <p className="text-muted text-xs bg-red-50/50 p-3 rounded-lg border border-red-100 max-w-md break-all leading-relaxed">{errorMsg}</p>
         <button
-          onClick={handleAssemble}
-          className="mt-2 inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-white hover:shadow-md"
+          onClick={() => { setStatus("config"); }}
+          className="mt-1 inline-flex items-center gap-2 rounded-lg bg-ink px-5 py-2.5 text-sm font-medium text-white hover:shadow-md hover:bg-[#2a2d30] transition-all"
         >
           <RotateCcw className="h-4 w-4" />
-          Try Again
+          Go Back
         </button>
       </section>
     );
   }
 
+  /* ───────── Config: choose resolution & render ───────── */
+  if (status === "config") {
+    return (
+      <section className="space-y-4 w-full min-w-0">
+        <div className="card-interactive animate-fade-slide-up rounded-card border border-line bg-surfaceRaised p-6 sm:p-8">
+          <div className="mb-6 sm:mb-8">
+            <span className="font-mono text-xs uppercase tracking-wide text-muted">
+              Final Assembly
+            </span>
+          </div>
+
+          {/* Hero */}
+          <div className="text-center space-y-3 mb-8">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent/10 border border-accent/20">
+              <Sparkles className="h-6 w-6 text-accent" />
+            </div>
+            <h3 className="font-display text-lg font-medium text-ink">
+              Ready to render
+            </h3>
+            <p className="text-sm text-muted max-w-sm mx-auto">
+              {scenes.length} scenes, voiceover, and captions are ready. Pick your resolution and hit render.
+            </p>
+          </div>
+
+          {/* Resolution picker */}
+          <div className="grid grid-cols-2 gap-3 max-w-md mx-auto mb-8">
+            <button
+              onClick={() => setResolution("1080p")}
+              className={`relative rounded-xl border-2 p-4 sm:p-5 text-left transition-all ${
+                resolution === "1080p"
+                  ? "border-accent bg-accent/5 shadow-sm"
+                  : "border-line bg-white hover:border-muted"
+              }`}
+            >
+              {resolution === "1080p" && (
+                <CheckCircle2 className="absolute top-3 right-3 h-4 w-4 text-accent" />
+              )}
+              <Monitor className="h-5 w-5 text-ink mb-2" />
+              <p className="font-medium text-sm text-ink">1080p</p>
+              <p className="text-xs text-muted mt-0.5">Full HD · 60fps</p>
+              <p className="text-[10px] text-muted/70 mt-1">Recommended</p>
+            </button>
+            <button
+              onClick={() => setResolution("4k")}
+              className={`relative rounded-xl border-2 p-4 sm:p-5 text-left transition-all ${
+                resolution === "4k"
+                  ? "border-accent bg-accent/5 shadow-sm"
+                  : "border-line bg-white hover:border-muted"
+              }`}
+            >
+              {resolution === "4k" && (
+                <CheckCircle2 className="absolute top-3 right-3 h-4 w-4 text-accent" />
+              )}
+              <MonitorSmartphone className="h-5 w-5 text-ink mb-2" />
+              <p className="font-medium text-sm text-ink">4K</p>
+              <p className="text-xs text-muted mt-0.5">Ultra HD · 60fps</p>
+              <p className="text-[10px] text-muted/70 mt-1">Slower render</p>
+            </button>
+          </div>
+
+          {/* Render button */}
+          <div className="flex justify-center">
+            <button
+              onClick={handleAssemble}
+              className="inline-flex items-center gap-2.5 rounded-xl bg-accent px-8 py-3 text-sm font-medium text-white hover:bg-accent-hover hover:shadow-lg transition-all active:scale-[0.98]"
+            >
+              <Play className="h-4 w-4" />
+              Render Video
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  /* ───────── Done: video player + download ───────── */
   return (
     <section className="space-y-4 w-full min-w-0">
       <div className="card-interactive animate-fade-slide-up rounded-card border border-line bg-surfaceRaised p-4 sm:p-6">
-        <div className="mb-4 sm:mb-6 flex items-center justify-between">
+        <div className="mb-4 sm:mb-5 flex items-center justify-between">
           <span className="font-mono text-xs uppercase tracking-wide text-muted">
-            Final Assembly
+            Your Video
           </span>
-          {status === "done" && (
-            <span className="animate-pop-in inline-flex items-center gap-1 text-xs font-medium text-accent">
-              <CheckCircle2 className="h-3.5 w-3.5 animate-check-pulse" />
-              Complete
-            </span>
-          )}
+          <span className="animate-pop-in inline-flex items-center gap-1.5 text-xs font-medium text-accent">
+            <CheckCircle2 className="h-3.5 w-3.5 animate-check-pulse" />
+            Rendered · {resolution === "4k" ? "4K" : "1080p"} 60fps
+          </span>
         </div>
 
-        {/* Success banner */}
-        <div className="rounded-xl border-2 border-accent/30 bg-accent/5 p-4 sm:p-6 text-center space-y-3 mb-4 sm:mb-6">
-          <div className="mx-auto flex h-12 w-12 sm:h-16 sm:w-16 items-center justify-center rounded-full bg-accent/10">
-            <Film className="h-6 w-6 sm:h-8 sm:w-8 text-accent" />
-          </div>
-          <h3 className="font-display text-base sm:text-lg font-medium text-ink">
-            Video Ready 🎉
-          </h3>
-          <p className="text-xs sm:text-sm text-muted max-w-md mx-auto">
-            Your video has been assembled from {scenes.length} scenes with
-            voice-over and burned-in captions.
-          </p>
-        </div>
-
-        {/* Inline video player */}
+        {/* Video player */}
         {finalVideoUrl && (
-          <div className="mb-4 sm:mb-6 rounded-lg overflow-hidden border border-line bg-black">
+          <div className="mb-5 sm:mb-6 rounded-xl overflow-hidden border border-line bg-black shadow-sm">
             <video
               key={finalVideoUrl}
               controls
-              className="w-full max-h-[50vh] object-contain"
+              autoPlay
+              className="w-full max-h-[55vh] object-contain"
               style={{ aspectRatio: "16/9" }}
             >
               <source src={finalVideoUrl} type="video/mp4" />
@@ -144,109 +209,35 @@ export function AssembleStage({ scenes, audioUrl, srtBlocks, onRestart }: Props)
           </div>
         )}
 
-        {/* Download button */}
-        <div className="flex justify-center mb-4 sm:mb-6">
+        {/* Action buttons */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <a
             href={finalVideoUrl || "#"}
             target="_blank"
             download="final_video.mp4"
-            className="inline-flex items-center gap-2 rounded-lg bg-ink px-5 py-2.5 text-sm font-medium text-white hover:shadow-md hover:bg-[#2a2d30]"
+            className="flex-1 inline-flex items-center justify-center gap-2.5 rounded-xl bg-accent px-6 py-3 text-sm font-medium text-white hover:bg-accent-hover hover:shadow-lg transition-all active:scale-[0.98]"
           >
             <Download className="h-4 w-4" />
-            Download final_video.mp4
+            Download Video
           </a>
-        </div>
 
-        {/* Assembly summary */}
-        <div className="rounded-lg border border-line bg-surface p-3 sm:p-4 space-y-3 sm:space-y-4">
-          <span className="font-mono text-xs text-muted block">
-            Assembly Summary
-          </span>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
-            <div className="rounded-lg border border-line bg-white p-2.5 sm:p-3 flex items-center gap-3">
-              <ImageIcon className="h-5 w-5 text-accent shrink-0" />
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-ink truncate">
-                  {scenes.length} images
-                </p>
-                <p className="text-[11px] text-muted">Selected scenes</p>
-              </div>
-            </div>
-            <div className="rounded-lg border border-line bg-white p-2.5 sm:p-3 flex items-center gap-3">
-              <Volume2 className="h-5 w-5 text-accent shrink-0" />
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-ink">Voice-over</p>
-                <p className="text-[11px] text-muted">Silences removed</p>
-              </div>
-            </div>
-            <div className="rounded-lg border border-line bg-white p-2.5 sm:p-3 flex items-center gap-3">
-              <Subtitles className="h-5 w-5 text-accent shrink-0" />
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-ink truncate">
-                  {srtBlocks.length} captions
-                </p>
-                <p className="text-[11px] text-muted">Burned-in .srt</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Timeline preview */}
-          <div className="space-y-2">
-            <span className="font-mono text-[11px] text-muted block">
-              Timeline
-            </span>
-            <div className="flex flex-nowrap overflow-x-auto pb-1 gap-1">
-              {scenes.map((scene) => (
-                <div
-                  key={scene.scene_id}
-                  className="rounded-md border border-line bg-white overflow-hidden"
-                  style={{ width: "72px", flexShrink: 0 }}
-                >
-                  {scene.selected_image ? (
-                    <img
-                      src={scene.selected_image}
-                      alt={`Scene ${scene.scene_id}`}
-                      className="w-full h-10 object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-10 bg-surface flex items-center justify-center">
-                      <ImageIcon className="h-3 w-3 text-muted" />
-                    </div>
-                  )}
-                  <div className="px-1 py-0.5">
-                    <p className="font-mono text-[9px] text-muted truncate text-center">
-                      S{scene.scene_id}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row justify-end items-center gap-3">
-          <select
-            value={resolution}
-            onChange={(e) => setResolution(e.target.value as "1080p" | "4k")}
-            className="rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none"
-          >
-            <option value="1080p">1080p 60fps</option>
-            <option value="4k">4K 60fps</option>
-          </select>
           <button
-            onClick={handleAssemble}
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-line px-4 py-2 text-sm text-ink hover:bg-surface hover:border-muted"
+            onClick={() => {
+              setFinalVideoUrl(null);
+              setStatus("config");
+            }}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-line px-5 py-3 text-sm text-ink hover:bg-surface hover:border-muted transition-all"
           >
             <RotateCcw className="h-4 w-4" />
-            Re-assemble
+            Re-render
           </button>
+
           <button
             onClick={onRestart}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-5 py-2 text-sm font-medium text-white hover:shadow-md hover:bg-accent/90"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-line px-5 py-3 text-sm text-muted hover:text-ink hover:bg-surface hover:border-muted transition-all"
           >
-            Complete & Start New
-            <ArrowRight className="h-4 w-4" />
+            <Sparkles className="h-4 w-4" />
+            New Project
           </button>
         </div>
       </div>

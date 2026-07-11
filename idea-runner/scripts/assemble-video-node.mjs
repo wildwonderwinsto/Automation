@@ -36,7 +36,7 @@ function parseSrtBlockTimes(srtContent, blockNumber) {
  * @param {string} ffmpegPath - resolved path to the ffmpeg binary (e.g. from ffmpeg-static)
  * @returns {string} path to the generated final_video.mp4
  */
-export function assembleVideo(projectDir, ffmpegPath, resolution = "1080p", fps = 30) {
+export function assembleVideo(projectDir, ffmpegPath, resolution = "1080p", fps = 30, captionStyle = null) {
   const scenesJsonPath = path.join(projectDir, 'scenes.json');
   const audioPath = path.join(projectDir, 'voiceover.mp3');
   const srtPath = path.join(projectDir, 'captions.srt');
@@ -62,7 +62,29 @@ export function assembleVideo(projectDir, ffmpegPath, resolution = "1080p", fps 
   const is4K = resolution === "4k";
   const targetWidth = is4K ? 3840 : 1920;
   const targetHeight = is4K ? 2160 : 1080;
-  const fontSize = is4K ? 44 : 22;
+
+  // Map caption style to ASS force_style values
+  const fontName = captionStyle?.fontFamily || 'Arial';
+  
+  const fontSizeMap = {
+    small: is4K ? 32 : 16,
+    medium: is4K ? 44 : 22,
+    large: is4K ? 60 : 30,
+  };
+  const fontSize = fontSizeMap[captionStyle?.fontSize] || fontSizeMap.medium;
+
+  // ASS Alignment values:
+  // 8 = top-center, 5 = middle-center, 2 = bottom-center
+  const alignmentMap = { top: 8, center: 5, bottom: 2 };
+  const alignment = alignmentMap[captionStyle?.position] || 2;
+
+  // MarginV adjusts distance from edge
+  const marginVMap = {
+    top: 40,
+    center: 10,
+    bottom: 40,
+  };
+  const marginV = marginVMap[captionStyle?.position] || 40;
 
   scenes.forEach((scene, i) => {
     const imagePath = scene.selected_image;
@@ -95,10 +117,12 @@ export function assembleVideo(projectDir, ffmpegPath, resolution = "1080p", fps 
   // 2. Concat all segments  → [raw]
   // 3. Burn in subtitles    → [video]
   // Using a single -filter_complex avoids the illegal -vf + -filter_complex combo.
+  const forceStyle = `FontName=${fontName},FontSize=${fontSize},PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,Shadow=1,Alignment=${alignment},MarginV=${marginV}`;
+  
   const filterComplex =
     filterParts.join(';') +
     `;${concatLabels.join('')}concat=n=${scenes.length}:v=1:a=0[raw]` +
-    `;[raw]subtitles='${safeSrtPath}':force_style='FontName=Arial,FontSize=${fontSize},PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,Shadow=1,Alignment=2,MarginV=40'[video]`;
+    `;[raw]subtitles='${safeSrtPath}':force_style='${forceStyle}'[video]`;
 
   const args = [
     '-y',

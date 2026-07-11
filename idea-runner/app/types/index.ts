@@ -19,3 +19,17 @@ export type Scene = {
   generated_images?: string[];
   selected_image?: string;
 };
+
+export type CaptionStyle = {
+  fontFamily: string;
+  fontSize: "small" | "medium" | "large";
+  position: "top" | "center" | "bottom";
+  transition: "none" | "fade" | "pop" | "slide-up" | "typewriter";
+};
+
+export const DEFAULT_CAPTION_STYLE: CaptionStyle = {
+  fontFamily: "Arial",
+  fontSize: "medium",
+  position: "bottom",
+  transition: "fade",
+};

@@ -1,6 +1,16 @@
 import { useState, useEffect } from "react";
-import { Scene } from "../../types";
-import { Check, CheckCircle2, Wand2, Loader2, Subtitles } from "lucide-react";
+import { Scene, CaptionStyle, DEFAULT_CAPTION_STYLE } from "../../types";
+import {
+  Check,
+  CheckCircle2,
+  Wand2,
+  Loader2,
+  Type,
+  AlignVerticalJustifyStart,
+  AlignVerticalJustifyCenter,
+  AlignVerticalJustifyEnd,
+  Sparkles,
+} from "lucide-react";
 
 type SrtBlock = {
   index: number;
@@ -14,29 +24,66 @@ type Props = {
   audioUrl: string | null;
   srtBlocks: SrtBlock[];
   onSrtGenerated: (blocks: SrtBlock[]) => void;
+  captionStyle: CaptionStyle;
+  onCaptionStyleChange: (style: CaptionStyle) => void;
   isApproved: boolean;
   onApprove: () => void;
 };
 
-function formatTimestamp(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  const ms = Math.round((seconds % 1) * 1000);
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")},${String(ms).padStart(3, "0")}`;
-}
+const FONT_OPTIONS = [
+  { value: "Arial", label: "Arial" },
+  { value: "Helvetica", label: "Helvetica" },
+  { value: "Impact", label: "Impact" },
+  { value: "Georgia", label: "Georgia" },
+  { value: "Courier New", label: "Courier New" },
+  { value: "Comic Sans MS", label: "Comic Sans" },
+  { value: "Trebuchet MS", label: "Trebuchet" },
+  { value: "Verdana", label: "Verdana" },
+];
+
+const SIZE_OPTIONS: { value: CaptionStyle["fontSize"]; label: string }[] = [
+  { value: "small", label: "Small" },
+  { value: "medium", label: "Medium" },
+  { value: "large", label: "Large" },
+];
+
+const POSITION_OPTIONS: {
+  value: CaptionStyle["position"];
+  label: string;
+  Icon: typeof AlignVerticalJustifyStart;
+}[] = [
+  { value: "top", label: "Top", Icon: AlignVerticalJustifyStart },
+  { value: "center", label: "Center", Icon: AlignVerticalJustifyCenter },
+  { value: "bottom", label: "Bottom", Icon: AlignVerticalJustifyEnd },
+];
+
+const TRANSITION_OPTIONS: {
+  value: CaptionStyle["transition"];
+  label: string;
+  desc: string;
+}[] = [
+  { value: "none", label: "None", desc: "Instant cut" },
+  { value: "fade", label: "Fade", desc: "Smooth opacity" },
+  { value: "pop", label: "Pop", desc: "Scale bounce" },
+  { value: "slide-up", label: "Slide Up", desc: "Rise from below" },
+  { value: "typewriter", label: "Typewriter", desc: "Letter by letter" },
+];
 
 export function CaptionsStage({
   scenes,
   audioUrl,
   srtBlocks,
   onSrtGenerated,
+  captionStyle,
+  onCaptionStyleChange,
   isApproved,
   onApprove,
 }: Props) {
   const [status, setStatus] = useState<"idle" | "generating" | "ready">(
     srtBlocks.length > 0 ? "ready" : "idle"
   );
+  const [previewText, setPreviewText] = useState("This is what your captions look like.");
+  const [previewAnimKey, setPreviewAnimKey] = useState(0);
 
   useEffect(() => {
     if (status === "idle" && scenes.length > 0) {
@@ -44,6 +91,24 @@ export function CaptionsStage({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Cycle through captions in the preview
+  useEffect(() => {
+    if (srtBlocks.length === 0) return;
+    let i = 0;
+    setPreviewText(srtBlocks[0].text);
+    const interval = setInterval(() => {
+      i = (i + 1) % srtBlocks.length;
+      setPreviewText(srtBlocks[i].text);
+      setPreviewAnimKey((k) => k + 1);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [srtBlocks]);
+
+  // Re-trigger animation on style change
+  function triggerPreviewAnim() {
+    setPreviewAnimKey((k) => k + 1);
+  }
 
   async function handleGenerateSrt() {
     if (status === "generating") return;
@@ -67,30 +132,73 @@ export function CaptionsStage({
     }
   }
 
-  function blocksToSrtString(blocks: SrtBlock[]): string {
-    return blocks
-      .map((b) => `${b.index}\n${b.start} --> ${b.end}\n${b.text}`)
-      .join("\n\n");
+  function updateStyle(patch: Partial<CaptionStyle>) {
+    onCaptionStyleChange({ ...captionStyle, ...patch });
+    triggerPreviewAnim();
   }
 
+  /* ── Preview font size mapping ── */
+  const previewFontSize =
+    captionStyle.fontSize === "small"
+      ? "text-xs sm:text-sm"
+      : captionStyle.fontSize === "large"
+      ? "text-lg sm:text-xl"
+      : "text-sm sm:text-base";
+
+  /* ── Preview position mapping ── */
+  const previewPositionClass =
+    captionStyle.position === "top"
+      ? "items-start pt-6"
+      : captionStyle.position === "center"
+      ? "items-center"
+      : "items-end pb-6";
+
+  /* ── Preview animation ── */
+  const transitionStyle = (() => {
+    switch (captionStyle.transition) {
+      case "fade":
+        return "animate-[captionFadeIn_0.4s_ease_both]";
+      case "pop":
+        return "animate-[captionPop_0.35s_cubic-bezier(0.22,1,0.36,1)_both]";
+      case "slide-up":
+        return "animate-[captionSlideUp_0.35s_ease_both]";
+      case "typewriter":
+        return "animate-[captionFadeIn_0.2s_ease_both]";
+      default:
+        return "";
+    }
+  })();
+
+  /* ───────── Loading state ───────── */
   if (status === "generating") {
     return (
-      <section className="card-interactive rounded-card border border-line bg-surfaceRaised p-6 flex h-64 flex-col items-center justify-center gap-4 text-sm text-muted">
-        <Loader2 className="h-6 w-6 animate-spin text-accent" />
-        <div className="text-center">
-          <p className="animate-pulse mb-1">Transcribing audio with AI...</p>
-          <p className="text-xs opacity-70">Aligning timestamps to scene boundaries...</p>
+      <section className="card-interactive rounded-card border border-line bg-surfaceRaised p-8 sm:p-12 flex flex-col items-center justify-center gap-5 text-sm text-muted min-h-[320px]">
+        <div className="relative">
+          <div
+            className="absolute inset-0 rounded-full bg-accent/20 animate-ping"
+            style={{ animationDuration: "2s" }}
+          />
+          <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-accent/10 border border-accent/20">
+            <Type className="h-7 w-7 text-accent animate-pulse" />
+          </div>
+        </div>
+        <div className="text-center space-y-2">
+          <p className="text-ink font-medium text-base">Generating captions...</p>
+          <p className="text-xs text-muted max-w-xs mx-auto">
+            Transcribing audio and aligning timestamps to scene boundaries.
+          </p>
         </div>
       </section>
     );
   }
 
+  /* ───────── Main UI ───────── */
   return (
-    <section className="space-y-4">
-      <div className="card-interactive animate-fade-slide-up rounded-card border border-line bg-surfaceRaised p-6">
-        <div className="mb-6 flex items-center justify-between">
+    <section className="space-y-4 w-full min-w-0">
+      <div className="card-interactive animate-fade-slide-up rounded-card border border-line bg-surfaceRaised p-4 sm:p-6">
+        <div className="mb-5 flex items-center justify-between">
           <span className="font-mono text-xs uppercase tracking-wide text-muted">
-            Generated Captions (.srt)
+            Caption Style
           </span>
           {isApproved && (
             <span className="animate-pop-in inline-flex items-center gap-1 text-xs font-medium text-accent">
@@ -100,55 +208,191 @@ export function CaptionsStage({
           )}
         </div>
 
-        {/* Visual timeline view */}
-        <div className="space-y-3 mb-6">
-          {srtBlocks.map((block) => (
-            <div
-              key={block.index}
-              className="rounded-lg border border-line bg-surface p-4 flex items-start gap-4"
+        {/* ── Live Preview ── */}
+        <div
+          className={`relative rounded-xl bg-gradient-to-br from-neutral-900 via-neutral-800 to-neutral-900 border border-white/10 overflow-hidden mb-6 flex justify-center ${previewPositionClass}`}
+          style={{ aspectRatio: "16/9", minHeight: "180px" }}
+        >
+          {/* Fake video frame lines */}
+          <div className="absolute inset-0 opacity-[0.03]" style={{
+            backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 2px, white 2px, white 3px)",
+          }} />
+          {/* Timestamp badge */}
+          <div className="absolute top-3 left-3 bg-black/50 backdrop-blur-sm rounded-md px-2 py-1 font-mono text-[10px] text-white/60">
+            00:00:03,200
+          </div>
+          {/* Caption text */}
+          <div
+            key={previewAnimKey}
+            className={`px-4 max-w-[85%] ${transitionStyle}`}
+          >
+            <p
+              className={`${previewFontSize} font-semibold text-center leading-snug px-3 py-1.5 rounded-md`}
+              style={{
+                fontFamily: captionStyle.fontFamily,
+                color: "white",
+                textShadow: "0 1px 4px rgba(0,0,0,0.8), 0 0 2px rgba(0,0,0,0.5)",
+              }}
             >
-              <div className="shrink-0 flex flex-col items-center gap-1">
-                <Subtitles className="h-4 w-4 text-accent" />
-                <span className="font-mono text-[10px] text-muted">#{block.index}</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-ink leading-relaxed">{block.text}</p>
-                <p className="mt-1 font-mono text-[11px] text-muted">
-                  {block.start} → {block.end}
-                </p>
-              </div>
-            </div>
-          ))}
+              {previewText}
+            </p>
+          </div>
         </div>
 
-        {/* Raw SRT preview */}
-        <details className="rounded-lg border border-line bg-white">
-          <summary className="cursor-pointer px-4 py-3 text-xs font-mono text-muted hover:text-ink select-none">
-            View raw .srt file
-          </summary>
-          <pre className="px-4 pb-4 text-xs text-ink leading-relaxed whitespace-pre-wrap font-mono overflow-x-auto">
-            {blocksToSrtString(srtBlocks)}
-          </pre>
-        </details>
+        {/* ── Config Controls ── */}
+        <div className="space-y-5">
+          {/* Font Family */}
+          <div>
+            <label className="block text-xs font-medium text-muted mb-2 uppercase tracking-wide font-mono">
+              Font
+            </label>
+            <select
+              value={captionStyle.fontFamily}
+              onChange={(e) => updateStyle({ fontFamily: e.target.value })}
+              className="w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm text-ink focus:border-accent focus:outline-none transition-colors"
+              style={{ fontFamily: captionStyle.fontFamily }}
+            >
+              {FONT_OPTIONS.map((f) => (
+                <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+          </div>
 
+          {/* Font Size */}
+          <div>
+            <label className="block text-xs font-medium text-muted mb-2 uppercase tracking-wide font-mono">
+              Size
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {SIZE_OPTIONS.map((s) => (
+                <button
+                  key={s.value}
+                  onClick={() => updateStyle({ fontSize: s.value })}
+                  className={`rounded-lg border-2 px-3 py-2 text-sm text-center transition-all ${
+                    captionStyle.fontSize === s.value
+                      ? "border-accent bg-accent/5 text-ink font-medium"
+                      : "border-line bg-white text-muted hover:border-muted"
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Position */}
+          <div>
+            <label className="block text-xs font-medium text-muted mb-2 uppercase tracking-wide font-mono">
+              Position
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {POSITION_OPTIONS.map((p) => {
+                const Icon = p.Icon;
+                return (
+                  <button
+                    key={p.value}
+                    onClick={() => updateStyle({ position: p.value })}
+                    className={`rounded-lg border-2 px-3 py-2.5 text-sm flex items-center justify-center gap-2 transition-all ${
+                      captionStyle.position === p.value
+                        ? "border-accent bg-accent/5 text-ink font-medium"
+                        : "border-line bg-white text-muted hover:border-muted"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Transition */}
+          <div>
+            <label className="block text-xs font-medium text-muted mb-2 uppercase tracking-wide font-mono">
+              Transition
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {TRANSITION_OPTIONS.map((t) => (
+                <button
+                  key={t.value}
+                  onClick={() => updateStyle({ transition: t.value })}
+                  className={`rounded-lg border-2 px-3 py-2.5 text-left transition-all ${
+                    captionStyle.transition === t.value
+                      ? "border-accent bg-accent/5"
+                      : "border-line bg-white hover:border-muted"
+                  }`}
+                >
+                  <p className={`text-sm ${captionStyle.transition === t.value ? "text-ink font-medium" : "text-ink"}`}>
+                    {t.label}
+                  </p>
+                  <p className="text-[10px] text-muted mt-0.5">{t.desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Captions List (collapsible) ── */}
+        {srtBlocks.length > 0 && (
+          <details className="mt-6 rounded-lg border border-line bg-surface">
+            <summary className="cursor-pointer px-4 py-3 text-xs font-mono text-muted hover:text-ink select-none flex items-center justify-between">
+              <span>{srtBlocks.length} captions generated</span>
+              <Sparkles className="h-3.5 w-3.5" />
+            </summary>
+            <div className="px-4 pb-4 space-y-2 max-h-60 overflow-y-auto">
+              {srtBlocks.map((block) => (
+                <div
+                  key={block.index}
+                  className="rounded-md bg-white border border-line px-3 py-2 flex items-baseline gap-3"
+                >
+                  <span className="font-mono text-[10px] text-muted shrink-0 tabular-nums">
+                    {block.start.split(",")[0]}
+                  </span>
+                  <p className="text-sm text-ink leading-snug">{block.text}</p>
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
+
+        {/* ── Actions ── */}
         <div className="mt-6 flex flex-wrap justify-end gap-2">
           <button
             onClick={handleGenerateSrt}
-            className="inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm text-ink hover:bg-surface hover:border-muted"
+            className="inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm text-ink hover:bg-surface hover:border-muted transition-all"
           >
             <Wand2 className="h-4 w-4" />
-            Regenerate Captions
+            Regenerate
           </button>
           <button
             onClick={onApprove}
             disabled={srtBlocks.length === 0}
-            className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-white hover:shadow-md hover:bg-[#2a2d30] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-white hover:shadow-md hover:bg-[#2a2d30] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
             <Check className="h-4 w-4" />
             Approve captions
           </button>
         </div>
       </div>
+
+      {/* ── Inline keyframes for caption animations ── */}
+      <style jsx global>{`
+        @keyframes captionFadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes captionPop {
+          0% { opacity: 0; transform: scale(0.6); }
+          60% { transform: scale(1.08); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        @keyframes captionSlideUp {
+          from { opacity: 0; transform: translateY(16px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </section>
   );
 }
