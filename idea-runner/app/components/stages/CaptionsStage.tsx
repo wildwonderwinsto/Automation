@@ -208,22 +208,25 @@ export function CaptionsStage({
   }
 
   /* ── Preview font size mapping ──
-   * These values exactly match the ASS FontSize at PlayRes 1920x1080:
-   * - small:  48 / 1920 = 2.5cqw
-   * - medium: 72 / 1920 = 3.75cqw
-   * - large:  96 / 1920 = 5cqw
-   * Because the preview container uses container-type: inline-size with
-   * 16:9 aspect ratio, these cqw values produce pixel-identical sizing.
+   * ASS (libass) and CSS define "font size" differently. CSS uses the EM square,
+   * while ASS uses the absolute bounding box (Ascender + Descender).
+   * For standard fonts like Arial, this means CSS renders the font ~10-15% larger
+   * than libass for the exact same pixel value. We apply a 0.895x compensation scale
+   * (derived from 2048 EM units / 2288 Ascender+Descender).
+   *
+   * These values match ASS FontSize at PlayRes 1920x1080:
+   * small: 48, medium: 72, large: 96
    */
   const fontSizeValues = { small: 48, medium: 72, large: 96 };
   const currentFontSize = fontSizeValues[captionStyle.fontSize] || 72;
-  const previewFontSize = `${(currentFontSize / 1920) * 100}cqw`;
+  const ASS_TO_CSS_SCALE = 0.895;
+  const currentFontSizeCqw = (currentFontSize / 1920) * 100 * ASS_TO_CSS_SCALE;
+  const previewFontSize = `${currentFontSizeCqw}cqw`;
 
   /* ── Outline/Shadow matching ASS values ──
    * Outline = 5.5% of font size, Shadow = 2.5% of font size
    * Convert from PlayRes units to cqw for the preview.
    */
-  const currentFontSizeCqw = (currentFontSize / 1920) * 100;
   const textShadowStyle = assOutlineShadowCqw(
     currentFontSizeCqw * 0.055 * 0.7, // Scaled slightly to match CSS multi-shadow thickness
     currentFontSizeCqw * 0.025 * 0.7
@@ -344,7 +347,7 @@ export function CaptionsStage({
                 fontFamily: captionStyle.fontFamily,
                 color: "white",
                 textShadow: textShadowStyle,
-                lineHeight: 1.2,
+                lineHeight: 1,
               }}
             >
               {captionStyle.transition === "typewriter" ? (
