@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Scene, CaptionStyle } from "../../types";
+import { Scene, SceneTiming, CaptionStyle } from "../../types";
 import {
   CheckCircle2,
   Loader2,
@@ -23,11 +23,12 @@ type Props = {
   scenes: Scene[];
   audioUrl: string | null;
   srtBlocks: SrtBlock[];
+  sceneTimings: SceneTiming[];
   captionStyle: CaptionStyle;
   onRestart: () => void;
 };
 
-export function AssembleStage({ scenes, audioUrl, srtBlocks, captionStyle, onRestart }: Props) {
+export function AssembleStage({ scenes, audioUrl, srtBlocks, sceneTimings, captionStyle, onRestart }: Props) {
   const [status, setStatus] = useState<
     "config" | "assembling" | "done" | "error"
   >("config");
@@ -44,7 +45,7 @@ export function AssembleStage({ scenes, audioUrl, srtBlocks, captionStyle, onRes
       const res = await fetch("/api/assemble-video", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scenes, srtBlocks, audioUrl, resolution, captionStyle }),
+        body: JSON.stringify({ scenes, srtBlocks, sceneTimings, audioUrl, resolution, captionStyle }),
       });
 
       if (!res.ok) {
@@ -210,15 +211,19 @@ export function AssembleStage({ scenes, audioUrl, srtBlocks, captionStyle, onRes
         )}
 
         {/* Action buttons */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mt-6">
           <a
             href={finalVideoUrl || "#"}
             target="_blank"
             download="final_video.mp4"
-            className="flex-1 inline-flex items-center justify-center gap-2.5 rounded-xl bg-accent px-6 py-3 text-sm font-medium text-white hover:bg-accent-hover hover:shadow-lg transition-all active:scale-[0.98]"
+            className="sm:col-span-2 group relative flex items-center justify-center gap-3 overflow-hidden rounded-xl bg-ink px-6 py-4 text-sm font-medium text-white transition-all hover:bg-black hover:shadow-xl active:scale-[0.99]"
           >
-            <Download className="h-4 w-4" />
-            Download Video
+            <div
+              className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100 animate-[shimmer_2s_infinite]"
+              style={{ backgroundSize: "200% 100%" }}
+            />
+            <Download className="h-5 w-5 relative z-10" />
+            <span className="relative z-10 text-base">Download Video</span>
           </a>
 
           <button
@@ -226,7 +231,7 @@ export function AssembleStage({ scenes, audioUrl, srtBlocks, captionStyle, onRes
               setFinalVideoUrl(null);
               setStatus("config");
             }}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-line px-5 py-3 text-sm text-ink hover:bg-surface hover:border-muted transition-all"
+            className="flex items-center justify-center gap-2 rounded-xl border border-line bg-white px-5 py-3.5 text-sm font-medium text-ink hover:border-accent hover:bg-accent/5 hover:text-accent transition-all active:scale-[0.99]"
           >
             <RotateCcw className="h-4 w-4" />
             Re-render
@@ -234,10 +239,10 @@ export function AssembleStage({ scenes, audioUrl, srtBlocks, captionStyle, onRes
 
           <button
             onClick={onRestart}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-line px-5 py-3 text-sm text-muted hover:text-ink hover:bg-surface hover:border-muted transition-all"
+            className="flex items-center justify-center gap-2 rounded-xl border border-line bg-white px-5 py-3.5 text-sm font-medium text-ink hover:border-muted hover:bg-surface transition-all active:scale-[0.99]"
           >
             <Sparkles className="h-4 w-4" />
-            New Project
+            Start New Project
           </button>
         </div>
       </div>

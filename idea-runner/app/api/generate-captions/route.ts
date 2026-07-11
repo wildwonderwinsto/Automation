@@ -6,7 +6,7 @@ import { execSync } from 'child_process';
 export async function POST(req: Request) {
   let projectDir = '';
   try {
-    const { scenes, audioUrl } = await req.json();
+    const { scenes, audioUrl, wordsPerCaption } = await req.json();
 
     if (!scenes || scenes.length === 0) {
       return NextResponse.json({ error: "No scenes provided" }, { status: 400 });
@@ -45,9 +45,14 @@ export async function POST(req: Request) {
       fs.copyFileSync(path.join(process.cwd(), 'public', 'voiceover.mp3'), localAudioPath);
     }
 
-    // Run the caption generation script
+    // Run the caption generation script with wordsPerCaption argument
+    const wpc = wordsPerCaption ?? 'max';
     const scriptPath = path.join(process.cwd(), 'scripts', 'generate-captions.mjs');
-    execSync(`node "${scriptPath}" "${projectDir}"`, { stdio: 'inherit' });
+    try {
+      execSync(`node "${scriptPath}" "${projectDir}" "${wpc}"`, { stdio: 'pipe' });
+    } catch (e: any) {
+      throw new Error(`Generate captions script failed: ${e.stderr?.toString() || e.message}`);
+    }
 
     // Read and parse the output SRT
     const srtPath = path.join(projectDir, 'captions.srt');
@@ -70,7 +75,14 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ srtBlocks: blocks });
+    // Read scene_timings.json
+    const sceneTimingsPath = path.join(projectDir, 'scene_timings.json');
+    let sceneTimings = [];
+    if (fs.existsSync(sceneTimingsPath)) {
+      sceneTimings = JSON.parse(fs.readFileSync(sceneTimingsPath, 'utf-8'));
+    }
+
+    return NextResponse.json({ srtBlocks: blocks, sceneTimings });
 
   } catch (error: any) {
     console.error("Caption generation error:", error);

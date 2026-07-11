@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Scene, CaptionStyle, DEFAULT_CAPTION_STYLE } from "../../types";
+import { Scene, SceneTiming, CaptionStyle, DEFAULT_CAPTION_STYLE } from "../../types";
 import {
   Check,
   CheckCircle2,
@@ -10,6 +10,7 @@ import {
   AlignVerticalJustifyCenter,
   AlignVerticalJustifyEnd,
   Sparkles,
+  Hash,
 } from "lucide-react";
 
 type SrtBlock = {
@@ -24,6 +25,7 @@ type Props = {
   audioUrl: string | null;
   srtBlocks: SrtBlock[];
   onSrtGenerated: (blocks: SrtBlock[]) => void;
+  onSceneTimingsGenerated: (timings: SceneTiming[]) => void;
   captionStyle: CaptionStyle;
   onCaptionStyleChange: (style: CaptionStyle) => void;
   isApproved: boolean;
@@ -67,6 +69,16 @@ const TRANSITION_OPTIONS: {
   { value: "pop", label: "Pop", desc: "Scale bounce" },
   { value: "slide-up", label: "Slide Up", desc: "Rise from below" },
   { value: "typewriter", label: "Typewriter", desc: "Letter by letter" },
+  { value: "bounce", label: "Bounce", desc: "Drop & bounce" },
+];
+
+const WPC_OPTIONS: { value: number | "max"; label: string }[] = [
+  { value: 1, label: "1" },
+  { value: 2, label: "2" },
+  { value: 3, label: "3" },
+  { value: 4, label: "4" },
+  { value: 5, label: "5" },
+  { value: "max", label: "Max" },
 ];
 
 export function CaptionsStage({
@@ -74,6 +86,7 @@ export function CaptionsStage({
   audioUrl,
   srtBlocks,
   onSrtGenerated,
+  onSceneTimingsGenerated,
   captionStyle,
   onCaptionStyleChange,
   isApproved,
@@ -84,6 +97,8 @@ export function CaptionsStage({
   );
   const [previewText, setPreviewText] = useState("This is what your captions look like.");
   const [previewAnimKey, setPreviewAnimKey] = useState(0);
+  const [typewriterText, setTypewriterText] = useState("");
+  const [typewriterDone, setTypewriterDone] = useState(false);
 
   useEffect(() => {
     if (status === "idle" && scenes.length > 0) {
@@ -110,20 +125,48 @@ export function CaptionsStage({
     setPreviewAnimKey((k) => k + 1);
   }
 
-  async function handleGenerateSrt() {
+  // Typewriter effect: reveal characters one at a time
+  useEffect(() => {
+    if (captionStyle.transition !== "typewriter") {
+      setTypewriterText(previewText);
+      setTypewriterDone(true);
+      return;
+    }
+    setTypewriterDone(false);
+    setTypewriterText("");
+    let charIndex = 0;
+    const interval = setInterval(() => {
+      charIndex++;
+      if (charIndex >= previewText.length) {
+        setTypewriterText(previewText);
+        setTypewriterDone(true);
+        clearInterval(interval);
+      } else {
+        setTypewriterText(previewText.slice(0, charIndex));
+      }
+    }, 40);
+    return () => clearInterval(interval);
+  }, [previewText, previewAnimKey, captionStyle.transition]);
+
+  async function handleGenerateSrt(wpcOverride?: number | "max") {
     if (status === "generating") return;
     setStatus("generating");
+
+    const wpc = wpcOverride ?? captionStyle.wordsPerCaption ?? "max";
 
     try {
       const res = await fetch("/api/generate-captions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scenes, audioUrl }),
+        body: JSON.stringify({ scenes, audioUrl, wordsPerCaption: wpc }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to generate captions");
 
       onSrtGenerated(data.srtBlocks);
+      if (data.sceneTimings) {
+        onSceneTimingsGenerated(data.sceneTimings);
+      }
       setStatus("ready");
     } catch (err: any) {
       console.error(err);
@@ -137,21 +180,34 @@ export function CaptionsStage({
     triggerPreviewAnim();
   }
 
+  function handleWordsPerCaptionChange(val: number | "max") {
+    onCaptionStyleChange({ ...captionStyle, wordsPerCaption: val });
+    // Re-generate captions with new word count
+    handleGenerateSrt(val);
+  }
+
   /* ── Preview font size mapping ── */
   const previewFontSize =
     captionStyle.fontSize === "small"
-      ? "text-xs sm:text-sm"
+      ? "2.5cqw"
       : captionStyle.fontSize === "large"
-      ? "text-lg sm:text-xl"
-      : "text-sm sm:text-base";
+      ? "5cqw"
+      : "3.75cqw";
 
   /* ── Preview position mapping ── */
   const previewPositionClass =
     captionStyle.position === "top"
-      ? "items-start pt-6"
+      ? "items-start"
       : captionStyle.position === "center"
       ? "items-center"
-      : "items-end pb-6";
+      : "items-end";
+  
+  const previewPaddingStyle = 
+    captionStyle.position === "top"
+      ? { paddingTop: "2cqw", paddingBottom: "0" }
+      : captionStyle.position === "center"
+      ? { paddingTop: "0", paddingBottom: "0" }
+      : { paddingTop: "0", paddingBottom: "2cqw" };
 
   /* ── Preview animation ── */
   const transitionStyle = (() => {
@@ -163,7 +219,9 @@ export function CaptionsStage({
       case "slide-up":
         return "animate-[captionSlideUp_0.35s_ease_both]";
       case "typewriter":
-        return "animate-[captionFadeIn_0.2s_ease_both]";
+        return ""; // handled by JS state
+      case "bounce":
+        return "animate-[captionBounce_0.5s_cubic-bezier(0.34,1.56,0.64,1)_both]";
       default:
         return "";
     }
@@ -211,7 +269,7 @@ export function CaptionsStage({
         {/* ── Live Preview ── */}
         <div
           className={`relative rounded-xl bg-gradient-to-br from-neutral-900 via-neutral-800 to-neutral-900 border border-white/10 overflow-hidden mb-6 flex justify-center ${previewPositionClass}`}
-          style={{ aspectRatio: "16/9", minHeight: "180px" }}
+          style={{ containerType: "inline-size", aspectRatio: "16/9", minHeight: "180px", ...previewPaddingStyle }}
         >
           {/* Fake video frame lines */}
           <div className="absolute inset-0 opacity-[0.03]" style={{
@@ -227,20 +285,58 @@ export function CaptionsStage({
             className={`px-4 max-w-[85%] ${transitionStyle}`}
           >
             <p
-              className={`${previewFontSize} font-semibold text-center leading-snug px-3 py-1.5 rounded-md`}
+              className="text-center leading-none"
               style={{
+                fontSize: previewFontSize,
                 fontFamily: captionStyle.fontFamily,
                 color: "white",
-                textShadow: "0 1px 4px rgba(0,0,0,0.8), 0 0 2px rgba(0,0,0,0.5)",
+                textShadow: "0 0.1cqw 0.2cqw rgba(0,0,0,0.8), 0 0 0.1cqw rgba(0,0,0,0.5)",
               }}
             >
-              {previewText}
+              {captionStyle.transition === "typewriter" ? (
+                <>
+                  {typewriterText}
+                  {!typewriterDone && (
+                    <span className="animate-[blink_0.7s_step-end_infinite] ml-[1px]">|</span>
+                  )}
+                </>
+              ) : (
+                previewText
+              )}
             </p>
           </div>
         </div>
 
         {/* ── Config Controls ── */}
         <div className="space-y-5">
+          {/* Words Per Caption */}
+          <div>
+            <label className="flex items-center gap-1.5 text-xs font-medium text-muted mb-2 uppercase tracking-wide font-mono">
+              <Hash className="h-3.5 w-3.5" />
+              Words Per Caption
+            </label>
+            <div className="grid grid-cols-6 gap-2">
+              {WPC_OPTIONS.map((opt) => (
+                <button
+                  key={String(opt.value)}
+                  onClick={() => handleWordsPerCaptionChange(opt.value)}
+                  className={`rounded-lg border-2 px-2 py-2.5 text-sm text-center transition-all ${
+                    captionStyle.wordsPerCaption === opt.value
+                      ? "border-accent bg-accent/5 text-ink font-medium"
+                      : "border-line bg-white text-muted hover:border-muted"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted mt-1.5 pl-0.5">
+              {captionStyle.wordsPerCaption === "max"
+                ? "Shows all words per scene at once"
+                : `Shows ${captionStyle.wordsPerCaption} word${Number(captionStyle.wordsPerCaption) > 1 ? "s" : ""} at a time, synced to the voiceover`}
+            </p>
+          </div>
+
           {/* Font Family */}
           <div>
             <label className="block text-xs font-medium text-muted mb-2 uppercase tracking-wide font-mono">
@@ -358,10 +454,10 @@ export function CaptionsStage({
         )}
 
         {/* ── Actions ── */}
-        <div className="mt-6 flex flex-wrap justify-end gap-2">
+        <div className="mt-6 flex flex-wrap justify-end gap-3">
           <button
-            onClick={handleGenerateSrt}
-            className="inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm text-ink hover:bg-surface hover:border-muted transition-all"
+            onClick={() => handleGenerateSrt()}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-line bg-white px-5 py-3 text-sm font-medium text-ink hover:border-muted hover:bg-surface transition-all active:scale-[0.99]"
           >
             <Wand2 className="h-4 w-4" />
             Regenerate
@@ -369,10 +465,10 @@ export function CaptionsStage({
           <button
             onClick={onApprove}
             disabled={srtBlocks.length === 0}
-            className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-white hover:shadow-md hover:bg-[#2a2d30] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-ink px-6 py-3 text-sm font-medium text-white hover:bg-black hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.99]"
           >
             <Check className="h-4 w-4" />
-            Approve captions
+            Approve Captions
           </button>
         </div>
       </div>
@@ -391,6 +487,12 @@ export function CaptionsStage({
         @keyframes captionSlideUp {
           from { opacity: 0; transform: translateY(16px); }
           to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes captionBounce {
+          0% { opacity: 0; transform: translateY(-20px) scale(0.9); }
+          50% { opacity: 1; transform: translateY(6px) scale(1.02); }
+          70% { transform: translateY(-3px) scale(1); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
         }
       `}</style>
     </section>

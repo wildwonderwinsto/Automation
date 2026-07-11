@@ -6,7 +6,7 @@ import { assembleVideo } from '../../../scripts/assemble-video-node.mjs';
 
 export async function POST(req: Request) {
   try {
-    const { scenes, srtBlocks, audioUrl, resolution = "1080p", captionStyle } = await req.json();
+    const { scenes, srtBlocks, sceneTimings, audioUrl, resolution = "1080p", captionStyle } = await req.json();
 
     // Create unique project dir
     const id = Date.now().toString();
@@ -48,6 +48,11 @@ export async function POST(req: Request) {
     // 2. Format SRT and save
     const srtContent = srtBlocks.map((b: any) => `${b.index}\n${b.start} --> ${b.end}\n${b.text}`).join('\n\n') + '\n';
     fs.writeFileSync(path.join(projectDir, 'captions.srt'), srtContent);
+
+    // 2b. Write scene_timings.json (used by assembler for image durations)
+    if (sceneTimings && sceneTimings.length > 0) {
+      fs.writeFileSync(path.join(projectDir, 'scene_timings.json'), JSON.stringify(sceneTimings, null, 2));
+    }
 
     // 3. Handle audioUrl
     const localAudioPath = path.join(projectDir, 'voiceover.mp3');

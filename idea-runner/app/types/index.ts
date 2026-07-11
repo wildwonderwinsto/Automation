@@ -24,7 +24,8 @@ export type CaptionStyle = {
   fontFamily: string;
   fontSize: "small" | "medium" | "large";
   position: "top" | "center" | "bottom";
-  transition: "none" | "fade" | "pop" | "slide-up" | "typewriter";
+  transition: "none" | "fade" | "pop" | "slide-up" | "typewriter" | "bounce";
+  wordsPerCaption: number | "max";
 };
 
 export const DEFAULT_CAPTION_STYLE: CaptionStyle = {
@@ -32,4 +33,11 @@ export const DEFAULT_CAPTION_STYLE: CaptionStyle = {
   fontSize: "medium",
   position: "bottom",
   transition: "fade",
+  wordsPerCaption: "max",
+};
+
+export type SceneTiming = {
+  sceneIndex: number;
+  start: number;
+  end: number;
 };

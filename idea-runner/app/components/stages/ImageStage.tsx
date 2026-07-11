@@ -37,8 +37,8 @@ export function ImageStage({
           ...scene,
           // Generate 2 mock placeholder images using placehold.co for better reliability
           generated_images: [
-            `https://placehold.co/600x400/2a2d30/ffffff.png?text=Scene+${scene.scene_id}+-+V1`,
-            `https://placehold.co/600x400/0E7C66/ffffff.png?text=Scene+${scene.scene_id}+-+V2`,
+            `https://placehold.co/1920x1080/2a2d30/ffffff.png?text=Scene+${scene.scene_id}+-+V1`,
+            `https://placehold.co/1920x1080/0E7C66/ffffff.png?text=Scene+${scene.scene_id}+-+V2`,
           ],
           selected_image: undefined, // Reset selection if regenerating
         }))

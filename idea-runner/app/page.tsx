@@ -9,7 +9,7 @@ import { ImageStage } from "./components/stages/ImageStage";
 import { VoiceoverStage } from "./components/stages/VoiceoverStage";
 import { CaptionsStage } from "./components/stages/CaptionsStage";
 import { AssembleStage } from "./components/stages/AssembleStage";
-import { Note, Scene, CaptionStyle, DEFAULT_CAPTION_STYLE } from "./types";
+import { Note, Scene, SceneTiming, CaptionStyle, DEFAULT_CAPTION_STYLE } from "./types";
 
 type SrtBlock = {
   index: number;
@@ -37,6 +37,7 @@ export default function Home() {
 
   // Stage 5 State
   const [srtBlocks, setSrtBlocks] = useState<SrtBlock[]>([]);
+  const [sceneTimings, setSceneTimings] = useState<SceneTiming[]>([]);
 
   // Stage 5 Caption Style
   const [captionStyle, setCaptionStyle] = useState<CaptionStyle>(DEFAULT_CAPTION_STYLE);
@@ -96,6 +97,7 @@ export default function Home() {
     setScenes([]);
     setAudioUrl(null);
     setSrtBlocks([]);
+    setSceneTimings([]);
     setCaptionStyle(DEFAULT_CAPTION_STYLE);
   }
 
@@ -176,6 +178,7 @@ export default function Home() {
               audioUrl={audioUrl}
               srtBlocks={srtBlocks}
               onSrtGenerated={setSrtBlocks}
+              onSceneTimingsGenerated={setSceneTimings}
               captionStyle={captionStyle}
               onCaptionStyleChange={setCaptionStyle}
               isApproved={completedStageIds.includes(5)}
@@ -188,6 +191,7 @@ export default function Home() {
               scenes={scenes}
               audioUrl={audioUrl}
               srtBlocks={srtBlocks}
+              sceneTimings={sceneTimings}
               captionStyle={captionStyle}
               onRestart={handleRestart}
             />
