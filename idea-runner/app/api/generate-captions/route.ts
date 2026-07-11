@@ -64,9 +64,9 @@ export async function POST(req: Request) {
     
     // Parse into srtBlocks
     const blocks = [];
-    const chunks = rawSrt.trim().split('\n\n');
+    const chunks = rawSrt.trim().split(/\r?\n\r?\n/);
     for (const chunk of chunks) {
-      const lines = chunk.split('\n');
+      const lines = chunk.split(/\r?\n/);
       if (lines.length >= 3) {
         const index = parseInt(lines[0], 10);
         const [start, end] = lines[1].split(' --> ');

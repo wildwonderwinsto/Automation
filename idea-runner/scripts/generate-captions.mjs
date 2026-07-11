@@ -167,7 +167,7 @@ try {
 
       finalSrt += `${captionIndex}\n`;
       finalSrt += `${startTimestamp} --> ${endTimestamp}\n`;
-      finalSrt += `${scene.script_text}\n\n`;
+      finalSrt += `${scene.script_text.replace(/\s+/g, ' ')}\n\n`;
       captionIndex++;
       wordIndex += sceneWords.length;
     }

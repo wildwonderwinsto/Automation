@@ -83,26 +83,20 @@ const WPC_OPTIONS: { value: number | "max"; label: string }[] = [
 
 /**
  * Generates a CSS text-shadow that closely mimics an ASS Outline effect.
- * ASS Outline creates a solid border around text. We approximate this with
- * multiple shadow layers in 8 directions + a soft ambient shadow.
- *
- * This is the key to making the preview match the FFmpeg render.
- * The outline thickness scales with font size (5.5% of font size),
- * matching the ASS Outline value in assemble-video-node.mjs.
+ * Uses cqw units so the outline scales proportionally with the font size.
  */
-function assOutlineShadow(outlinePx: number, shadowPx: number): string {
-  // 8-direction solid outline (simulates ASS Outline border)
-  const outline = outlinePx;
+function assOutlineShadowCqw(outlineCqw: number, shadowCqw: number): string {
+  // 8-direction solid outline
   const directions = [
-    [outline, 0], [-outline, 0], [0, outline], [0, -outline],
-    [outline, outline], [-outline, -outline], [outline, -outline], [-outline, outline],
+    [outlineCqw, 0], [-outlineCqw, 0], [0, outlineCqw], [0, -outlineCqw],
+    [outlineCqw, outlineCqw], [-outlineCqw, -outlineCqw], [outlineCqw, -outlineCqw], [-outlineCqw, outlineCqw],
   ];
   const outlineShadows = directions.map(
-    ([x, y]) => `${x}px ${y}px 0 rgba(0,0,0,0.95)`
+    ([x, y]) => `${x}cqw ${y}cqw 0 rgba(0,0,0,0.95)`
   );
 
-  // Drop shadow (simulates ASS Shadow)
-  const dropShadow = `${shadowPx}px ${shadowPx}px ${shadowPx * 2}px rgba(0,0,0,0.5)`;
+  // Drop shadow
+  const dropShadow = `${shadowCqw}cqw ${shadowCqw}cqw ${shadowCqw * 2}cqw rgba(0,0,0,0.5)`;
 
   return [...outlineShadows, dropShadow].join(', ');
 }
@@ -227,16 +221,12 @@ export function CaptionsStage({
 
   /* ── Outline/Shadow matching ASS values ──
    * Outline = 5.5% of font size, Shadow = 2.5% of font size
-   * These match assemble-video-node.mjs exactly.
    * Convert from PlayRes units to cqw for the preview.
    */
-  const outlinePx = Math.max(1, Math.round(currentFontSize * 0.055));
-  const shadowPx = Math.max(1, Math.round(currentFontSize * 0.025));
-  const textShadowStyle = assOutlineShadow(
-    // Scale outline to container-query relative size
-    // At full 1920px width these are exact; at smaller preview sizes they scale proportionally
-    Math.round(outlinePx * 0.7), // Slight reduction since CSS multi-shadow looks heavier
-    Math.round(shadowPx * 0.7)
+  const currentFontSizeCqw = (currentFontSize / 1920) * 100;
+  const textShadowStyle = assOutlineShadowCqw(
+    currentFontSizeCqw * 0.055 * 0.7, // Scaled slightly to match CSS multi-shadow thickness
+    currentFontSizeCqw * 0.025 * 0.7
   );
 
   /* ── Preview position mapping ──
