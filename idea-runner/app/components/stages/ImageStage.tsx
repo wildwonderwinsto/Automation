@@ -9,6 +9,37 @@ type Props = {
   onApprove: () => void;
 };
 
+const MS_PAINT_STYLE = "MS Paint style, drawn with a mouse, shaky wobbly outlines, flat colors, uneven proportions, no shading, no gradients, white background, low-resolution, deliberately crude";
+
+function ImageWithLoading({ src, alt, isSelected }: { src: string, alt: string, isSelected: boolean }) {
+  const [isLoading, setIsLoading] = useState(true);
+  
+  return (
+    <div className="relative w-full aspect-[16/9] bg-surface flex items-center justify-center overflow-hidden">
+       {isLoading && (
+         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-surfaceRaised/50">
+           <Loader2 className="h-5 w-5 animate-spin text-accent" />
+           <span className="text-[10px] text-muted font-mono animate-pulse">Drawing...</span>
+         </div>
+       )}
+       <img 
+         src={src} 
+         alt={alt} 
+         onLoad={() => setIsLoading(false)}
+         className={`w-full h-full object-cover transition-opacity duration-300 ${isLoading ? 'opacity-0' : 'opacity-100'}`} 
+       />
+       {isSelected && (
+         <div className="absolute top-2 right-2 bg-accent text-white rounded-full p-1 shadow-sm animate-pop-in">
+           <CheckCircle2 className="w-4 h-4" />
+         </div>
+       )}
+       <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-sm px-2 py-1 rounded text-white text-[10px] font-mono">
+         {alt}
+       </div>
+    </div>
+  );
+}
+
 export function ImageStage({
   scenes,
   onScenesChange,
@@ -30,21 +61,27 @@ export function ImageStage({
     if (status === "generating") return;
     setStatus("generating");
 
-    // Placeholder — Simulate AI generating images
-    setTimeout(() => {
-      onScenesChange(
-        scenes.map((scene) => ({
-          ...scene,
-          // Generate 2 mock placeholder images using placehold.co for better reliability
-          generated_images: [
-            `https://placehold.co/1920x1080/2a2d30/ffffff.png?text=Scene+${scene.scene_id}+-+V1`,
-            `https://placehold.co/1920x1080/0E7C66/ffffff.png?text=Scene+${scene.scene_id}+-+V2`,
-          ],
-          selected_image: undefined, // Reset selection if regenerating
-        }))
-      );
-      setStatus("ready");
-    }, 2500);
+    const updatedScenes = scenes.map((scene) => {
+      // Prompt engineering: Append the MS Paint style modifiers
+      const fullPrompt = `${scene.simple_description}, ${MS_PAINT_STYLE}`;
+      const encodedPrompt = encodeURIComponent(fullPrompt);
+      
+      // Use random seeds so we get variations, but the URL remains deterministic for assembly caching
+      const seed1 = Math.floor(Math.random() * 1000000);
+      const seed2 = Math.floor(Math.random() * 1000000);
+      
+      const url1 = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1920&height=1080&nologo=true&seed=${seed1}`;
+      const url2 = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1920&height=1080&nologo=true&seed=${seed2}`;
+
+      return {
+        ...scene,
+        generated_images: [url1, url2],
+        selected_image: undefined, // Reset selection if regenerating
+      };
+    });
+
+    onScenesChange(updatedScenes);
+    setStatus("ready");
   }
 
   function handleSelectImage(sceneId: number, imageSrc: string) {
@@ -73,15 +110,15 @@ export function ImageStage({
     return (
       <section className="card-interactive rounded-card border border-line bg-surfaceRaised p-6 flex h-64 flex-col items-center justify-center gap-4 text-sm text-muted">
         <Loader2 className="h-6 w-6 animate-spin text-accent" />
-        <p className="animate-pulse">Generating 2 image variations per scene using Google Whisk...</p>
+        <p className="animate-pulse">Setting up image generation pipeline...</p>
       </section>
     );
   }
 
   return (
-    <section className="space-y-4">
-      <div className="card-interactive animate-fade-slide-up rounded-card border border-line bg-surfaceRaised p-6">
-        <div className="mb-4 flex items-center justify-between">
+    <section className="space-y-4 w-full min-w-0">
+      <div className="card-interactive animate-fade-slide-up rounded-card border border-line bg-surfaceRaised p-4 sm:p-6">
+        <div className="mb-5 flex items-center justify-between">
           <span className="font-mono text-xs uppercase tracking-wide text-muted">
             Choose Best Image
           </span>
@@ -103,13 +140,13 @@ export function ImageStage({
                 <span className="font-mono text-xs text-muted mb-1 block">
                   Scene {scene.scene_id}
                 </span>
-                <p className="text-sm font-medium text-ink leading-relaxed bg-white border border-line rounded-md p-2">
-                  <span className="text-muted mr-2">Prompt:</span>
+                <p className="text-sm font-medium text-ink leading-relaxed bg-white border border-line rounded-md p-3">
+                  <span className="text-muted mr-2 font-mono text-[10px] uppercase">Prompt:</span>
                   &ldquo;{scene.simple_description}&rdquo;
                 </p>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {scene.generated_images?.map((imgSrc, idx) => {
                   const isSelected = scene.selected_image === imgSrc;
                   return (
@@ -118,20 +155,15 @@ export function ImageStage({
                       onClick={() => handleSelectImage(scene.scene_id, imgSrc)}
                       className={`relative overflow-hidden rounded-lg border-2 transition-all duration-200 ${
                         isSelected 
-                          ? "border-accent ring-2 ring-accent/30 shadow-md scale-[1.02]" 
+                          ? "border-accent ring-2 ring-accent/30 shadow-md scale-[1.02] z-10" 
                           : "border-transparent hover:border-line hover:opacity-90"
                       }`}
                     >
-                      <img src={imgSrc} alt={`Variation ${idx + 1}`} className="w-full h-auto object-cover aspect-[3/2] block" />
-                      
-                      {isSelected && (
-                        <div className="absolute top-2 right-2 bg-accent text-white rounded-full p-1 shadow-sm animate-pop-in">
-                          <CheckCircle2 className="w-4 h-4" />
-                        </div>
-                      )}
-                      <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-sm px-2 py-1 rounded text-white text-[10px] font-mono">
-                        V{idx + 1}
-                      </div>
+                      <ImageWithLoading 
+                        src={imgSrc} 
+                        alt={`V${idx + 1}`} 
+                        isSelected={isSelected} 
+                      />
                     </button>
                   );
                 })}
@@ -140,20 +172,20 @@ export function ImageStage({
           ))}
         </div>
 
-        <div className="mt-6 flex flex-wrap justify-end gap-2">
+        <div className="mt-8 flex flex-wrap justify-end gap-3">
           <button
             onClick={handleGenerateImages}
-            className="inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm text-ink hover:bg-surface hover:border-muted"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-line bg-white px-5 py-3 text-sm font-medium text-ink hover:border-muted hover:bg-surface transition-all active:scale-[0.99]"
           >
             <Wand2 className="h-4 w-4" />
             Regenerate All
           </button>
           <button
             onClick={handleApproveSubmit}
-            className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-white hover:shadow-md hover:bg-[#2a2d30]"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-ink px-6 py-3 text-sm font-medium text-white hover:bg-black hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.99]"
           >
             <Check className="h-4 w-4" />
-            Approve images
+            Approve Images
           </button>
         </div>
       </div>
