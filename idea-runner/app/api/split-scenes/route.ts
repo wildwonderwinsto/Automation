@@ -9,9 +9,9 @@ export async function POST(req: Request) {
     
     if (script === "This is a test script to check the video pipeline. It bypasses the AI completely to save time and API quota. Let's see if the final video renders correctly!") {
       return NextResponse.json({ scenes: [
-        { scene_id: 1, script_text: "This is a test script to check the video pipeline.", simple_description: "A person looking at a computer screen showing code." },
-        { scene_id: 2, script_text: "It bypasses the AI completely to save time and API quota.", simple_description: "A futuristic AI brain with a red 'X' over it." },
-        { scene_id: 3, script_text: "Let's see if the final video renders correctly!", simple_description: "A film clapperboard snapping shut." }
+        { scene_id: 1, script_text: "This is a test script to check the video pipeline.", simple_description: "person look at screen" },
+        { scene_id: 2, script_text: "It bypasses the AI completely to save time and API quota.", simple_description: "brain with red x" },
+        { scene_id: 3, script_text: "Let's see if the final video renders correctly!", simple_description: "clapperboard snap shut" }
       ]});
     }
 
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
             properties: {
               scene_id: { type: SchemaType.NUMBER, description: "Sequential ID of the scene starting from 1" },
               script_text: { type: SchemaType.STRING, description: "Exact, verbatim substring of the script for this scene" },
-              simple_description: { type: SchemaType.STRING, description: "A very brief, literal visual description of what's happening" },
+              simple_description: { type: SchemaType.STRING, description: "Cave man speak visual description. Absolute minimum words possible. No descriptive words like adjectives or adverbs. Nouns, verbs, and basic prepositions only (e.g. 'look at')." },
               note: { type: SchemaType.STRING, description: "Optional note if something is ambiguous" }
             },
             required: ["scene_id", "script_text", "simple_description"]

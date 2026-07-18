@@ -24,7 +24,8 @@ export type CaptionStyle = {
   fontFamily: string;
   fontSize: "small" | "medium" | "large";
   position: "top" | "center" | "bottom";
-  transition: "none" | "fade" | "pop" | "slide-up" | "typewriter" | "bounce";
+  transition: "none" | "fade" | "pop" | "slide-up" | "typewriter" | "bounce" | "word-highlight";
+  highlightColor: string;
   wordsPerCaption: number | "max";
 };
 
@@ -32,8 +33,9 @@ export const DEFAULT_CAPTION_STYLE: CaptionStyle = {
   fontFamily: "Arial",
   fontSize: "medium",
   position: "bottom",
-  transition: "fade",
-  wordsPerCaption: "max",
+  transition: "word-highlight",
+  highlightColor: "#FFD700",
+  wordsPerCaption: 3,
 };
 
 export type SceneTiming = {

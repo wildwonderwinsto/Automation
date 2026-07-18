@@ -104,10 +104,10 @@ function alignScriptToAsr(scriptWords, asrWords) {
 
   function subCost(a, b) {
     if (a === b) return 0;
-    if (a.length === 0 || b.length === 0) return 1;
+    if (a.length === 0 || b.length === 0) return 2.0;
     const dist = levenshtein(a, b);
     const ratio = dist / Math.max(a.length, b.length);
-    return ratio <= 0.34 ? 0.4 : 1; // tolerate a 1-2 char mishear
+    return ratio <= 0.34 ? 0.4 : 2.0; // tolerate a 1-2 char mishear
   }
 
   // dp[i][j] = min cost aligning first i script words with first j asr words

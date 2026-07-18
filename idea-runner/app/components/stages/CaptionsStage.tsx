@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Scene, SceneTiming, CaptionStyle, DEFAULT_CAPTION_STYLE } from "../../types";
+import { Scene, SceneTiming, CaptionStyle, WordTiming, DEFAULT_CAPTION_STYLE } from "../../types";
 import {
   Check,
   CheckCircle2,
@@ -26,6 +26,8 @@ type Props = {
   srtBlocks: SrtBlock[];
   onSrtGenerated: (blocks: SrtBlock[]) => void;
   onSceneTimingsGenerated: (timings: SceneTiming[]) => void;
+  wordTimings: WordTiming[];
+  onWordTimingsGenerated: (timings: WordTiming[]) => void;
   captionStyle: CaptionStyle;
   onCaptionStyleChange: (style: CaptionStyle) => void;
   isApproved: boolean;
@@ -59,16 +61,28 @@ const POSITION_OPTIONS: {
   { value: "bottom", label: "Bottom", Icon: AlignVerticalJustifyEnd },
 ];
 
+const HIGHLIGHT_COLORS = [
+  { value: "#FFD700", label: "Gold" },
+  { value: "#00FFFF", label: "Cyan" },
+  { value: "#FF6B6B", label: "Coral" },
+  { value: "#7C3AED", label: "Purple" },
+  { value: "#22D3EE", label: "Sky" },
+  { value: "#F97316", label: "Orange" },
+  { value: "#10B981", label: "Emerald" },
+  { value: "#EC4899", label: "Pink" },
+];
+
 const TRANSITION_OPTIONS: {
   value: CaptionStyle["transition"];
   label: string;
   desc: string;
 }[] = [
+  { value: "word-highlight", label: "Highlight", desc: "CapCut style" },
   { value: "none", label: "None", desc: "Instant cut" },
   { value: "fade", label: "Fade", desc: "Smooth opacity" },
   { value: "pop", label: "Pop", desc: "Scale bounce" },
   { value: "slide-up", label: "Slide Up", desc: "Rise from below" },
-  { value: "typewriter", label: "Typewriter", desc: "Word by word" },
+  { value: "typewriter", label: "Typewriter", desc: "Word reveal" },
   { value: "bounce", label: "Bounce", desc: "Drop & bounce" },
 ];
 
@@ -124,6 +138,8 @@ export function CaptionsStage({
   srtBlocks,
   onSrtGenerated,
   onSceneTimingsGenerated,
+  wordTimings,
+  onWordTimingsGenerated,
   captionStyle,
   onCaptionStyleChange,
   isApproved,
@@ -145,6 +161,7 @@ export function CaptionsStage({
   }, []);
 
   const [activeBlockIndex, setActiveBlockIndex] = useState(-1);
+  const [activeWordIndex, setActiveWordIndex] = useState(-1);
   const [currentTimeMs, setCurrentTimeMs] = useState("00:00:00,000");
 
   const handleTimeUpdate = (e: React.SyntheticEvent<HTMLAudioElement>) => {
@@ -169,6 +186,25 @@ export function CaptionsStage({
       } else {
         setPreviewText("");
       }
+    }
+
+    // Track active word for word-highlight preview
+    if (wordTimings.length > 0 && activeIdx >= 0) {
+      const blockStart = parseTimeStr(srtBlocks[activeIdx].start);
+      const blockEnd = parseTimeStr(srtBlocks[activeIdx].end);
+      const blockWords = wordTimings.filter(
+        (w) => w.start >= blockStart - 0.05 && w.end <= blockEnd + 0.05
+      );
+      let wIdx = -1;
+      for (let i = 0; i < blockWords.length; i++) {
+        if (t >= blockWords[i].start && t < (i < blockWords.length - 1 ? blockWords[i + 1].start : blockEnd)) {
+          wIdx = i;
+          break;
+        }
+      }
+      setActiveWordIndex(wIdx);
+    } else {
+      setActiveWordIndex(-1);
     }
   };
 
@@ -225,6 +261,9 @@ export function CaptionsStage({
       onSrtGenerated(data.srtBlocks);
       if (data.sceneTimings) {
         onSceneTimingsGenerated(data.sceneTimings);
+      }
+      if (data.wordTimings) {
+        onWordTimingsGenerated(data.wordTimings);
       }
       setStatus("ready");
     } catch (err: any) {
@@ -388,7 +427,34 @@ export function CaptionsStage({
                 lineHeight: 1,
               }}
             >
-              {captionStyle.transition === "typewriter" ? (
+              {captionStyle.transition === "word-highlight" ? (
+                // CapCut-style: all words visible, active word highlighted
+                previewText.split(/\s+/).map((word, idx) => {
+                  // Find the block's word timings to match index
+                  let isActive = false;
+                  if (activeBlockIndex >= 0 && wordTimings.length > 0) {
+                    const blockStart = parseTimeStr(srtBlocks[activeBlockIndex].start);
+                    const blockEnd = parseTimeStr(srtBlocks[activeBlockIndex].end);
+                    const blockWords = wordTimings.filter(
+                      (w) => w.start >= blockStart - 0.05 && w.end <= blockEnd + 0.05
+                    );
+                    isActive = idx === activeWordIndex && idx < blockWords.length;
+                  }
+                  return (
+                    <span
+                      key={idx}
+                      style={{
+                        color: isActive ? captionStyle.highlightColor : "white",
+                        fontWeight: isActive ? 700 : 400,
+                        display: "inline",
+                        transition: "color 0.12s ease, font-weight 0.12s ease",
+                      }}
+                    >
+                      {idx > 0 ? " " : ""}{word}
+                    </span>
+                  );
+                })
+              ) : captionStyle.transition === "typewriter" ? (
                 <>
                   {typewriterText}
                   {!typewriterDone && (
@@ -534,6 +600,36 @@ export function CaptionsStage({
               ))}
             </div>
           </div>
+
+          {/* Highlight Color (shown for word-highlight and typewriter) */}
+          {(captionStyle.transition === "word-highlight" || captionStyle.transition === "typewriter") && (
+            <div>
+              <label className="block text-xs font-medium text-muted mb-2 uppercase tracking-wide font-mono">
+                Highlight Color
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {HIGHLIGHT_COLORS.map((c) => (
+                  <button
+                    key={c.value}
+                    onClick={() => updateStyle({ highlightColor: c.value })}
+                    className={`group relative w-9 h-9 rounded-full border-2 transition-all ${
+                      captionStyle.highlightColor === c.value
+                        ? "border-ink shadow-md scale-110"
+                        : "border-line hover:border-muted hover:scale-105"
+                    }`}
+                    style={{ backgroundColor: c.value }}
+                    title={c.label}
+                  >
+                    {captionStyle.highlightColor === c.value && (
+                      <span className="absolute inset-0 flex items-center justify-center">
+                        <Check className="h-4 w-4 text-white drop-shadow-md" />
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── Captions List (collapsible) ── */}

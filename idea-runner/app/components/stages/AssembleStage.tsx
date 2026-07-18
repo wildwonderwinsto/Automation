@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Scene, SceneTiming, CaptionStyle } from "../../types";
+import { Scene, SceneTiming, CaptionStyle, WordTiming } from "../../types";
 import {
   CheckCircle2,
   Loader2,
@@ -24,17 +24,19 @@ type Props = {
   audioUrl: string | null;
   srtBlocks: SrtBlock[];
   sceneTimings: SceneTiming[];
+  wordTimings: WordTiming[];
   captionStyle: CaptionStyle;
   onRestart: () => void;
 };
 
-export function AssembleStage({ scenes, audioUrl, srtBlocks, sceneTimings, captionStyle, onRestart }: Props) {
+export function AssembleStage({ scenes, audioUrl, srtBlocks, sceneTimings, wordTimings, captionStyle, onRestart }: Props) {
   const [status, setStatus] = useState<
     "config" | "assembling" | "done" | "error"
   >("config");
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [resolution, setResolution] = useState<"1080p" | "4k">("1080p");
+  const [includeCaptions, setIncludeCaptions] = useState<boolean>(true);
 
   async function handleAssemble() {
     if (status === "assembling") return;
@@ -45,7 +47,7 @@ export function AssembleStage({ scenes, audioUrl, srtBlocks, sceneTimings, capti
       const res = await fetch("/api/assemble-video", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scenes, srtBlocks, sceneTimings, audioUrl, resolution, captionStyle }),
+        body: JSON.stringify({ scenes, srtBlocks, sceneTimings, wordTimings, audioUrl, resolution, captionStyle, includeCaptions }),
       });
 
       if (!res.ok) {
@@ -165,6 +167,23 @@ export function AssembleStage({ scenes, audioUrl, srtBlocks, sceneTimings, capti
             </button>
           </div>
 
+          {/* Include Captions Toggle */}
+          <div className="max-w-md mx-auto mb-6 flex items-center justify-between rounded-xl border border-line bg-white p-4">
+            <div>
+              <p className="font-medium text-sm text-ink">Burn-in Captions</p>
+              <p className="text-xs text-muted mt-0.5">Add on-screen subtitles to the final video</p>
+            </div>
+            <label className="relative inline-flex cursor-pointer items-center">
+              <input
+                type="checkbox"
+                className="peer sr-only"
+                checked={includeCaptions}
+                onChange={(e) => setIncludeCaptions(e.target.checked)}
+              />
+              <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-accent peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+            </label>
+          </div>
+
           {/* Caption style summary */}
           <div className="max-w-md mx-auto mb-8 rounded-xl border border-line bg-surface p-4">
             <p className="font-mono text-[10px] uppercase tracking-wide text-muted mb-3">Caption Settings</p>
@@ -179,11 +198,27 @@ export function AssembleStage({ scenes, audioUrl, srtBlocks, sceneTimings, capti
               <span className="text-ink font-medium text-right capitalize">{captionStyle.transition}</span>
               <span className="text-muted">Words/caption</span>
               <span className="text-ink font-medium text-right">{captionStyle.wordsPerCaption === "max" ? "Max (per scene)" : captionStyle.wordsPerCaption}</span>
+              {(captionStyle.transition === "word-highlight" || captionStyle.transition === "typewriter") && (
+                <>
+                  <span className="text-muted">Highlight</span>
+                  <span className="text-ink font-medium text-right flex items-center justify-end gap-1.5">
+                    <span className="w-3 h-3 rounded-full border border-line" style={{ backgroundColor: captionStyle.highlightColor }} />
+                    {captionStyle.highlightColor}
+                  </span>
+                </>
+              )}
             </div>
-            <p className="text-[10px] text-muted/70 mt-3 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              Rendered via ASS format — preview-accurate
-            </p>
+            {includeCaptions ? (
+              <p className="text-[10px] text-muted/70 mt-3 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                Rendered via ASS format — preview-accurate
+              </p>
+            ) : (
+              <p className="text-[10px] text-muted/70 mt-3 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                Captions disabled for final render
+              </p>
+            )}
           </div>
 
           {/* Render button */}

@@ -6,7 +6,7 @@ import { assembleVideo } from '../../../scripts/assemble-video-node.mjs';
 
 export async function POST(req: Request) {
   try {
-    const { scenes, srtBlocks, sceneTimings, audioUrl, resolution = "1080p", captionStyle } = await req.json();
+    const { scenes, srtBlocks, sceneTimings, wordTimings, audioUrl, resolution = "1080p", captionStyle, includeCaptions = true } = await req.json();
 
     // Create unique project dir
     const id = Date.now().toString();
@@ -54,6 +54,11 @@ export async function POST(req: Request) {
       fs.writeFileSync(path.join(projectDir, 'scene_timings.json'), JSON.stringify(sceneTimings, null, 2));
     }
 
+    // 2c. Write word_timings.json (used by assembler for karaoke/word-highlight mode)
+    if (wordTimings && wordTimings.length > 0) {
+      fs.writeFileSync(path.join(projectDir, 'word_timings.json'), JSON.stringify(wordTimings, null, 2));
+    }
+
     // 3. Handle audioUrl
     const localAudioPath = path.join(projectDir, 'voiceover.mp3');
     if (audioUrl) {
@@ -81,7 +86,7 @@ export async function POST(req: Request) {
     if (!ffmpegStatic) {
       throw new Error('ffmpeg-static did not resolve a binary for this platform');
     }
-    assembleVideo(projectDir, ffmpegStatic, resolution, 60, captionStyle);
+    assembleVideo(projectDir, ffmpegStatic, resolution, 60, captionStyle, includeCaptions);
 
     // Return relative URL for frontend
     const finalVideoUrl = `/output/${id}/final_video.mp4`;

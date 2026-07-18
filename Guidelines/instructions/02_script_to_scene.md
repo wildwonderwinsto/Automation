@@ -41,7 +41,7 @@ one scene.
 
 **Scene length.** Aim for extremely short, punchy scenes — strictly 2 to 3 words per scene. Do not exceed 4 words in a single scene. This ensures fast-paced visuals and allows the downstream caption generator to display only a couple of words on screen at a time.
 
-**simple_description must be extremely brief and literal.** It should state exactly what the subject is doing in plain terms without any artistic style, complex background details, or abstract concepts (e.g., "character using a megaphone", "man walking next to two trees"). This ensures the scene can be easily mapped to an existing library of simple images.
+**simple_description must use 'cave man speak'.** Absolute minimum amount of words possible. No descriptive words, adjectives, or adverbs. Only basic nouns, verbs, and prepositions to connect actions (e.g., "man with megaphone", "man walk to tree", "person look at screen"). This ensures the scene can be easily mapped to an existing library of simple images.
 
 **When something's genuinely ambiguous** (unclear who's speaking, a claim
 that could be interpreted several very different ways), flag it in a `note`
@@ -56,12 +56,12 @@ Return only this JSON array — no preamble, no commentary:
   {
     "scene_id": 1,
     "script_text": "Most people think discipline is about willpower.",
-    "simple_description": "character standing with arms crossed"
+    "simple_description": "character cross arms"
   },
   {
     "scene_id": 2,
     "script_text": "It's actually about designing your environment so you don't need any.",
-    "simple_description": "character arranging his desk",
+    "simple_description": "character arrange desk",
     "note": "Optional — only include this field when something needs human review."
   }
 ]
