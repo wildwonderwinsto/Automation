@@ -101,6 +101,23 @@ function assOutlineShadowCqw(outlineCqw: number, shadowCqw: number): string {
   return [...outlineShadows, dropShadow].join(', ');
 }
 
+function parseTimeStr(timeStr: string) {
+  if (!timeStr) return 0;
+  const parts = timeStr.split(',');
+  if (parts.length < 2) return 0;
+  const [hms, ms] = parts;
+  const [h, m, s] = hms.split(':').map(Number);
+  return h * 3600 + m * 60 + s + Number(ms) / 1000;
+}
+
+function formatTimeMs(seconds: number) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  const ms = Math.floor((seconds % 1) * 1000);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')},${String(ms).padStart(3, '0')}`;
+}
+
 export function CaptionsStage({
   scenes,
   audioUrl,
@@ -127,18 +144,39 @@ export function CaptionsStage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Cycle through captions in the preview
+  const [activeBlockIndex, setActiveBlockIndex] = useState(-1);
+  const [currentTimeMs, setCurrentTimeMs] = useState("00:00:00,000");
+
+  const handleTimeUpdate = (e: React.SyntheticEvent<HTMLAudioElement>) => {
+    const t = e.currentTarget.currentTime;
+    setCurrentTimeMs(formatTimeMs(t));
+    
+    let activeIdx = -1;
+    for (let i = 0; i < srtBlocks.length; i++) {
+      const start = parseTimeStr(srtBlocks[i].start);
+      const end = parseTimeStr(srtBlocks[i].end);
+      if (t >= start && t <= end) {
+        activeIdx = i;
+        break;
+      }
+    }
+    
+    if (activeIdx !== activeBlockIndex) {
+      setActiveBlockIndex(activeIdx);
+      if (activeIdx >= 0) {
+        setPreviewText(srtBlocks[activeIdx].text);
+        setPreviewAnimKey((k) => k + 1);
+      } else {
+        setPreviewText("");
+      }
+    }
+  };
+
   useEffect(() => {
-    if (srtBlocks.length === 0) return;
-    let i = 0;
-    setPreviewText(srtBlocks[0].text);
-    const interval = setInterval(() => {
-      i = (i + 1) % srtBlocks.length;
-      setPreviewText(srtBlocks[i].text);
-      setPreviewAnimKey((k) => k + 1);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [srtBlocks]);
+    if (srtBlocks.length > 0 && activeBlockIndex === -1 && !previewText) {
+      setPreviewText(srtBlocks[0].text);
+    }
+  }, [srtBlocks, activeBlockIndex, previewText]);
 
   // Re-trigger animation on style change
   function triggerPreviewAnim() {
@@ -328,7 +366,7 @@ export function CaptionsStage({
           }} />
           {/* Timestamp badge */}
           <div className="absolute top-3 left-3 bg-black/50 backdrop-blur-sm rounded-md px-2 py-1 font-mono text-[10px] text-white/60">
-            00:00:03,200
+            {currentTimeMs}
           </div>
           {/* Render method badge */}
           <div className="absolute top-3 right-3 bg-black/50 backdrop-blur-sm rounded-md px-2 py-1 font-mono text-[10px] text-white/60 flex items-center gap-1">
@@ -363,6 +401,17 @@ export function CaptionsStage({
             </p>
           </div>
         </div>
+
+        {audioUrl && (
+          <div className="mb-6 flex justify-center">
+            <audio 
+              src={audioUrl} 
+              controls 
+              onTimeUpdate={handleTimeUpdate}
+              className="w-full max-w-md h-10 outline-none"
+            />
+          </div>
+        )}
 
         {/* ── Config Controls ── */}
         <div className="space-y-5">

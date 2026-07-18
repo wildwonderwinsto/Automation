@@ -19,7 +19,7 @@ const OUTPUT_SRT = path.join(PROJECT_DIR, 'captions.srt');
 const WORD_TIMINGS_FILE = path.join(PROJECT_DIR, 'word_timings.json');
 const SCENE_TIMINGS_FILE = path.join(PROJECT_DIR, 'scene_timings.json');
 
-const WHISPER_BIN = path.join(__dirname, '..', 'bin', 'whisper.cpp', 'main');
+const WHISPER_BIN = path.join(__dirname, '..', 'bin', 'whisper.cpp', process.platform === 'win32' ? 'whisper-cli.exe' : 'whisper-cli');
 const WHISPER_MODEL = path.join(__dirname, '..', 'bin', 'whisper.cpp', 'models', 'ggml-base.en.bin');
 
 function parseTime(timeStr) {
@@ -48,6 +48,134 @@ function cleanWord(word) {
     .replace(/^\s+|\s+$/g, '')     // Trim whitespace
     .replace(/^[^\w'"¿¡]+/, '')    // Remove leading non-word chars (except quotes)
     .replace(/[^\w.,!?;:'"…\-¿¡]+$/, ''); // Remove trailing non-word chars (except punctuation)
+}
+
+/**
+ * Normalizes a word for comparison purposes only (matching), never for display.
+ * Lowercases and strips punctuation so "Word." and "word" are treated as equal.
+ */
+function normalizeForMatch(word) {
+  return word.toLowerCase().replace(/[^\w']/g, '');
+}
+
+/**
+ * Small Levenshtein distance for short strings — used to tolerate minor
+ * ASR mishears (e.g. "for"/"four") without treating them as a full mismatch.
+ */
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+/**
+ * Aligns the KNOWN script words against Whisper's raw (and sometimes wrong)
+ * transcript, using a Needleman-Wunsch style edit-distance alignment instead
+ * of assuming the two word lists line up position-for-position.
+ *
+ * This is the core fix for voice-changes / mis-transcriptions: rather than
+ * assuming "script word N === whisper word N" (which breaks permanently the
+ * moment Whisper splits, drops, or mishears a single word), we find the best
+ * global alignment between the two sequences. Script words that Whisper
+ * skipped or mangled are left unmatched here and get their timestamps filled
+ * in afterward by interpolation (see `fillTimingGaps`).
+ *
+ * Returns an array the same length as scriptWords, each entry either
+ * { start, end } (Whisper matched it) or null (needs interpolation).
+ */
+function alignScriptToAsr(scriptWords, asrWords) {
+  const n = scriptWords.length;
+  const m = asrWords.length;
+  const norm = (w) => normalizeForMatch(w);
+  const scriptNorm = scriptWords.map(norm);
+  const asrNorm = asrWords.map((w) => norm(w.word));
+
+  const GAP_COST = 0.9; // cost of skipping a word on either side
+
+  function subCost(a, b) {
+    if (a === b) return 0;
+    if (a.length === 0 || b.length === 0) return 1;
+    const dist = levenshtein(a, b);
+    const ratio = dist / Math.max(a.length, b.length);
+    return ratio <= 0.34 ? 0.4 : 1; // tolerate a 1-2 char mishear
+  }
+
+  // dp[i][j] = min cost aligning first i script words with first j asr words
+  const dp = Array.from({ length: n + 1 }, () => new Float64Array(m + 1));
+  for (let i = 1; i <= n; i++) dp[i][0] = i * GAP_COST;
+  for (let j = 1; j <= m; j++) dp[0][j] = j * GAP_COST;
+  for (let i = 1; i <= n; i++) {
+    for (let j = 1; j <= m; j++) {
+      const matchCost = dp[i - 1][j - 1] + subCost(scriptNorm[i - 1], asrNorm[j - 1]);
+      const skipScript = dp[i - 1][j] + GAP_COST; // script word unmatched (ASR missed it)
+      const skipAsr = dp[i][j - 1] + GAP_COST;    // asr word unmatched (extra/hallucinated)
+      dp[i][j] = Math.min(matchCost, skipScript, skipAsr);
+    }
+  }
+
+  // Backtrack to recover the alignment
+  const result = new Array(n).fill(null);
+  let i = n, j = m;
+  while (i > 0 && j > 0) {
+    const matchCost = dp[i - 1][j - 1] + subCost(scriptNorm[i - 1], asrNorm[j - 1]);
+    if (dp[i][j] === matchCost) {
+      result[i - 1] = { start: asrWords[j - 1].start, end: asrWords[j - 1].end };
+      i--; j--;
+    } else if (dp[i][j] === dp[i - 1][j] + GAP_COST) {
+      i--; // this script word has no ASR match — filled in later
+    } else {
+      j--; // extra ASR word, ignore
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Fills in timestamps for script words Whisper didn't match, by evenly
+ * interpolating across the nearest matched neighbors on either side.
+ * Mutates and returns `aligned` with every entry now {start, end}.
+ */
+function fillTimingGaps(aligned) {
+  const n = aligned.length;
+  let gapStart = -1;
+  for (let i = 0; i <= n; i++) {
+    const hasMatch = i < n && aligned[i] !== null;
+    if (!hasMatch) {
+      if (gapStart === -1) gapStart = i;
+      continue;
+    }
+    if (gapStart !== -1) {
+      const prevEnd = gapStart > 0 ? aligned[gapStart - 1].end : aligned[i] ? aligned[i].start - (i - gapStart) * 0.3 : 0;
+      const nextStart = aligned[i].start;
+      const gapLen = i - gapStart;
+      const span = Math.max(nextStart - prevEnd, 0.05 * gapLen);
+      for (let k = 0; k < gapLen; k++) {
+        const t0 = prevEnd + (span * k) / gapLen;
+        const t1 = prevEnd + (span * (k + 1)) / gapLen;
+        aligned[gapStart + k] = { start: t0, end: t1 };
+      }
+      gapStart = -1;
+    }
+  }
+  // Trailing gap with no right-hand anchor (Whisper missed the very last word(s))
+  if (gapStart !== -1) {
+    const prevEnd = gapStart > 0 ? aligned[gapStart - 1].end : 0;
+    for (let k = gapStart; k < n; k++) {
+      aligned[k] = { start: prevEnd + (k - gapStart) * 0.3, end: prevEnd + (k - gapStart + 1) * 0.3 };
+    }
+  }
+  return aligned;
 }
 
 /**
@@ -103,73 +231,69 @@ try {
     return { word: text, start: parseTime(start), end: parseTime(end) };
   }).filter(Boolean);
 
-  // 3b. Save word-level timings for the video assembler (used for karaoke/typewriter mode)
-  // This is the key data that CapCut uses for word-by-word highlighting.
-  writeFileSync(WORD_TIMINGS_FILE, JSON.stringify(allWords, null, 2));
-  console.log(`   ✓ Wrote word_timings.json (${allWords.length} words)`);
+  // 3b. Build the known script word list (with scene attribution) and align
+  // it against Whisper's transcript. This replaces position-based slicing —
+  // it survives Whisper dropping, mishearing, or splitting words differently,
+  // which is exactly what changes when you swap TTS voices.
+  console.log("3b. Aligning script words to ASR transcript...");
+  const scriptWordEntries = [];
+  scenes.forEach((scene, sceneIndex) => {
+    const words = scene.script_text.split(/\s+/).filter((w) => w.length > 0);
+    words.forEach((text) => scriptWordEntries.push({ text, sceneIndex }));
+  });
 
-  // 4. Build scene timings by consuming words per scene
+  const aligned = fillTimingGaps(
+    alignScriptToAsr(scriptWordEntries.map((w) => w.text), allWords)
+  );
+  const scriptWordTimings = scriptWordEntries.map((w, idx) => ({
+    word: w.text,
+    sceneIndex: w.sceneIndex,
+    start: aligned[idx].start,
+    end: aligned[idx].end,
+  }));
+
+  // 3c. Save word-level timings for the video assembler (used for karaoke/typewriter mode).
+  // These are your clean script words with aligned timestamps — not Whisper's raw transcript —
+  // so on-screen text is always correctly spelled/punctuated regardless of ASR mistakes.
+  writeFileSync(
+    WORD_TIMINGS_FILE,
+    JSON.stringify(scriptWordTimings.map(({ word, start, end }) => ({ word, start, end })), null, 2)
+  );
+  console.log(`   ✓ Wrote word_timings.json (${scriptWordTimings.length} words)`);
+
+  // 4. Build scene timings from the aligned script words (grouped by scene)
   console.log("4. Building scene timings...");
-  const sceneTimings = [];
-  let wordIndex = 0;
-
-  for (let i = 0; i < scenes.length; i++) {
-    const scene = scenes[i];
-    const sceneWords = scene.script_text.split(/\s+/).filter(w => w.length > 0);
-    const consumedWords = allWords.slice(wordIndex, wordIndex + sceneWords.length);
-
-    let startSec = 0;
-    let endSec = 1;
-
-    if (consumedWords.length > 0) {
-      startSec = consumedWords[0].start;
-      endSec = consumedWords[consumedWords.length - 1].end;
-    } else if (i > 0 && allWords[wordIndex - 1]) {
-      startSec = allWords[wordIndex - 1].end;
-      endSec = allWords[wordIndex - 1].end + 1;
-    }
-
-    sceneTimings.push({
+  const sceneTimings = scenes.map((_, i) => {
+    const wordsInScene = scriptWordTimings.filter((w) => w.sceneIndex === i);
+    if (wordsInScene.length === 0) return { sceneIndex: i, start: 0, end: 1 };
+    return {
       sceneIndex: i,
-      start: startSec,
-      end: endSec,
-    });
-
-    wordIndex += sceneWords.length;
-  }
+      start: wordsInScene[0].start,
+      end: wordsInScene[wordsInScene.length - 1].end,
+    };
+  });
 
   // Write scene_timings.json (used by the video assembler for image durations)
   writeFileSync(SCENE_TIMINGS_FILE, JSON.stringify(sceneTimings, null, 2));
   console.log(`   ✓ Wrote scene_timings.json (${sceneTimings.length} scenes)`);
 
-  // 5. Build captions SRT based on wordsPerCaption setting
+  // 5. Build captions SRT based on wordsPerCaption setting.
+  // Both modes now read from scriptWordTimings — the caption text is always
+  // your clean script, only the grouping (how many words per block) changes.
   console.log("5. Building captions SRT...");
-  
+
   const wpc = WORDS_PER_CAPTION === 'max' ? Infinity : parseInt(WORDS_PER_CAPTION, 10);
   let finalSrt = '';
   let captionIndex = 1;
 
   if (wpc >= Infinity) {
-    // "max" mode: one caption per scene (original behavior)
-    wordIndex = 0;
+    // "max" mode: one caption per scene
     for (let i = 0; i < scenes.length; i++) {
-      const scene = scenes[i];
-      const sceneWords = scene.script_text.split(/\s+/).filter(w => w.length > 0);
-      const consumedWords = allWords.slice(wordIndex, wordIndex + sceneWords.length);
-
-      let startTimestamp = "00:00:00,000";
-      let endTimestamp = "00:00:01,000";
-
-      if (consumedWords.length > 0) {
-        startTimestamp = formatTime(consumedWords[0].start);
-        endTimestamp = formatTime(consumedWords[consumedWords.length - 1].end);
-      }
-
+      const timing = sceneTimings[i];
       finalSrt += `${captionIndex}\n`;
-      finalSrt += `${startTimestamp} --> ${endTimestamp}\n`;
-      finalSrt += `${scene.script_text.replace(/\s+/g, ' ')}\n\n`;
+      finalSrt += `${formatTime(timing.start)} --> ${formatTime(timing.end)}\n`;
+      finalSrt += `${scenes[i].script_text.replace(/\s+/g, ' ')}\n\n`;
       captionIndex++;
-      wordIndex += sceneWords.length;
     }
   } else {
     // Chunked mode: group every N words into a caption block.
@@ -177,24 +301,24 @@ try {
     // - Don't leave a lone function word at the end of a group
     // - Keep short words attached to the next content word
     let i = 0;
-    while (i < allWords.length) {
-      let chunkEnd = Math.min(i + wpc, allWords.length);
+    while (i < scriptWordTimings.length) {
+      let chunkEnd = Math.min(i + wpc, scriptWordTimings.length);
 
       // Smart boundary: if the last word in the chunk is a function word
       // and there are more words, extend the chunk to include the next content word
-      if (chunkEnd < allWords.length && chunkEnd > i) {
-        const lastWord = allWords[chunkEnd - 1];
-        if (isFunctionWord(lastWord.word) && chunkEnd < allWords.length) {
-          chunkEnd = Math.min(chunkEnd + 1, allWords.length);
+      if (chunkEnd < scriptWordTimings.length && chunkEnd > i) {
+        const lastWord = scriptWordTimings[chunkEnd - 1];
+        if (isFunctionWord(lastWord.word) && chunkEnd < scriptWordTimings.length) {
+          chunkEnd = Math.min(chunkEnd + 1, scriptWordTimings.length);
         }
       }
 
-      const chunk = allWords.slice(i, chunkEnd);
+      const chunk = scriptWordTimings.slice(i, chunkEnd);
       if (chunk.length === 0) break;
 
       const startTimestamp = formatTime(chunk[0].start);
       const endTimestamp = formatTime(chunk[chunk.length - 1].end);
-      const text = chunk.map(w => w.word).join(' ');
+      const text = chunk.map((w) => w.word).join(' ');
 
       finalSrt += `${captionIndex}\n`;
       finalSrt += `${startTimestamp} --> ${endTimestamp}\n`;

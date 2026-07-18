@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Scene } from "../../types";
-import { Check, CheckCircle2, Wand2, Loader2, Image as ImageIcon } from "lucide-react";
+import { Check, CheckCircle2, Wand2, Loader2, Image as ImageIcon, RefreshCw, AlertCircle } from "lucide-react";
 
 type Props = {
   scenes: Scene[];
@@ -9,33 +9,105 @@ type Props = {
   onApprove: () => void;
 };
 
-const MS_PAINT_STYLE = "MS Paint style, drawn with a mouse, shaky wobbly outlines, flat colors, uneven proportions, no shading, no gradients, white background, low-resolution, deliberately crude";
+const MS_PAINT_STYLE = "flat 2D MS Paint style illustration, drawn with a mouse, thick shaky wobbly black outlines, solid flat colors, naive uneven proportions, no shading, no gradients, no anti-aliasing, plain white background, crude childlike linework, rendered sharp, crisp, and clean at high resolution, not blurry, not soft, not pixelated, not low quality";
 
-function ImageWithLoading({ src, alt, isSelected }: { src: string, alt: string, isSelected: boolean }) {
+const MAX_RETRIES = 5;
+const BASE_DELAY_MS = 3000;
+
+function ImageWithLoading({ src, alt, isSelected, loadDelay = 0 }: { src: string, alt: string, isSelected: boolean, loadDelay?: number }) {
   const [isLoading, setIsLoading] = useState(true);
-  
+  const [retryCount, setRetryCount] = useState(0);
+  const [currentSrc, setCurrentSrc] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Stagger the initial load with a delay
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setCurrentSrc(src);
+    }, loadDelay);
+    return () => clearTimeout(timer);
+  }, [src, loadDelay]);
+
+  // Cleanup retry timer on unmount
+  useEffect(() => {
+    return () => {
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    };
+  }, []);
+
+  const handleError = useCallback(() => {
+    if (retryCount >= MAX_RETRIES) {
+      setFailed(true);
+      setIsLoading(false);
+      return;
+    }
+    
+    const delay = BASE_DELAY_MS * Math.pow(1.5, retryCount);
+    setRetryCount(prev => prev + 1);
+    
+    retryTimerRef.current = setTimeout(() => {
+      // Add a cache-bust param to force a fresh request
+      const bustParam = `&_cb=${Date.now()}`;
+      const newSrc = src.includes('_cb=') ? src.replace(/&_cb=\d+/, bustParam) : src + bustParam;
+      setCurrentSrc(newSrc);
+    }, delay);
+  }, [retryCount, src]);
+
+  const handleManualRetry = () => {
+    setFailed(false);
+    setIsLoading(true);
+    setRetryCount(0);
+    const bustParam = `&_cb=${Date.now()}`;
+    const newSrc = src.includes('_cb=') ? src.replace(/&_cb=\d+/, bustParam) : src + bustParam;
+    setCurrentSrc(newSrc);
+  };
+
+  const statusText = !currentSrc
+    ? "Queued..."
+    : retryCount > 0
+    ? `Drawing... (attempt ${retryCount + 1})`
+    : "Drawing...";
+
   return (
     <div className="relative w-full aspect-[16/9] bg-surface flex items-center justify-center overflow-hidden">
-       {isLoading && (
+       {failed ? (
+         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-surfaceRaised">
+           <AlertCircle className="h-5 w-5 text-red-400" />
+           <span className="text-[10px] text-muted font-mono">Failed to load</span>
+           <button
+             onClick={(e) => { e.stopPropagation(); handleManualRetry(); }}
+             className="mt-1 inline-flex items-center gap-1 rounded-md bg-white border border-line px-2 py-1 text-[10px] font-mono text-ink hover:bg-surface transition-colors"
+           >
+             <RefreshCw className="h-3 w-3" />
+             Retry
+           </button>
+         </div>
+       ) : isLoading && (
          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-surfaceRaised/50">
            <Loader2 className="h-5 w-5 animate-spin text-accent" />
-           <span className="text-[10px] text-muted font-mono animate-pulse">Drawing...</span>
+           <span className="text-[10px] text-muted font-mono animate-pulse">{statusText}</span>
          </div>
        )}
-       <img 
-         src={src} 
-         alt={alt} 
-         onLoad={() => setIsLoading(false)}
-         className={`w-full h-full object-cover transition-opacity duration-300 ${isLoading ? 'opacity-0' : 'opacity-100'}`} 
-       />
-       {isSelected && (
+       {currentSrc && (
+         <img 
+           src={currentSrc} 
+           alt={alt} 
+           onLoad={() => { setIsLoading(false); setFailed(false); }}
+           onError={handleError}
+           className={`w-full h-full object-cover transition-opacity duration-300 ${isLoading || failed ? 'opacity-0' : 'opacity-100'}`} 
+         />
+       )}
+       {isSelected && !failed && (
          <div className="absolute top-2 right-2 bg-accent text-white rounded-full p-1 shadow-sm animate-pop-in">
            <CheckCircle2 className="w-4 h-4" />
          </div>
        )}
-       <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-sm px-2 py-1 rounded text-white text-[10px] font-mono">
-         {alt}
-       </div>
+       {!failed && (
+         <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-sm px-2 py-1 rounded text-white text-[10px] font-mono">
+           {alt}
+         </div>
+       )}
     </div>
   );
 }
@@ -70,8 +142,10 @@ export function ImageStage({
       const seed1 = Math.floor(Math.random() * 1000000);
       const seed2 = Math.floor(Math.random() * 1000000);
       
-      const url1 = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1920&height=1080&nologo=true&seed=${seed1}`;
-      const url2 = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1920&height=1080&nologo=true&seed=${seed2}`;
+      // Generate at native 4K so the Assemble stage's 4K option never upscales a
+      // softer source — 4K downscales cleanly to 1080p, but 1080p upscaled to 4K blurs.
+      const url1 = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=3840&height=2160&model=flux&nologo=true&seed=${seed1}`;
+      const url2 = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=3840&height=2160&model=flux&nologo=true&seed=${seed2}`;
 
       return {
         ...scene,
@@ -131,7 +205,7 @@ export function ImageStage({
         </div>
 
         <div className="space-y-6">
-          {scenes.map((scene) => (
+          {scenes.map((scene, sceneIdx) => (
             <div
               key={scene.scene_id}
               className="rounded-lg border border-line bg-surface p-4"
@@ -149,6 +223,9 @@ export function ImageStage({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {scene.generated_images?.map((imgSrc, idx) => {
                   const isSelected = scene.selected_image === imgSrc;
+                  // Stagger loads: 5s apart per image across all scenes
+                  const globalIdx = sceneIdx * 2 + idx;
+                  const delay = globalIdx * 5000;
                   return (
                     <button
                       key={idx}
@@ -163,6 +240,7 @@ export function ImageStage({
                         src={imgSrc} 
                         alt={`V${idx + 1}`} 
                         isSelected={isSelected} 
+                        loadDelay={delay}
                       />
                     </button>
                   );

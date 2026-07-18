@@ -365,9 +365,6 @@ export function assembleVideo(projectDir, ffmpegPath, resolution = "1080p", fps 
   console.log(`   ✓ Generated ASS subtitle file: ${assPath}`);
 
   // Escape the ASS path for ffmpeg filter syntax
-  // ffmpeg treats ':' as option separator and '\' as escape — handle both
-  const safeAssPath = assPath.replace(/\\/g, '/').replace(/:/g, '\\\\:');
-
   // Build the full filter_complex graph:
   // 1. Scale/pad each image → [v0], [v1], ...
   // 2. Concat all segments  → [raw]
@@ -377,10 +374,11 @@ export function assembleVideo(projectDir, ffmpegPath, resolution = "1080p", fps 
   // - ass= reads the full ASS file with styles baked in
   // - No force_style needed — everything is in the ASS header
   // - PlayResX/PlayResY handles resolution scaling automatically
+  // We run ffmpeg inside projectDir to avoid escaping issues with C: drive colons
   const filterComplex =
     filterParts.join(';') +
     `;${concatLabels.join('')}concat=n=${scenes.length}:v=1:a=0[raw]` +
-    `;[raw]ass='${safeAssPath}'[video]`;
+    `;[raw]ass='captions.ass'[video]`;
 
   const args = [
     '-y',
@@ -395,7 +393,7 @@ export function assembleVideo(projectDir, ffmpegPath, resolution = "1080p", fps 
     outputPath,
   ];
 
-  execFileSync(ffmpegPath, args, { stdio: 'inherit' });
+  execFileSync(ffmpegPath, args, { stdio: 'inherit', cwd: projectDir });
 
   return outputPath;
 }
